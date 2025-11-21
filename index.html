@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Data Operasional Viewer (Auto Load)</title>
+    <title>Data Inaport</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
     <style>
@@ -21,19 +21,39 @@
         
         <div class="mb-8 flex flex-col md:flex-row justify-between items-center bg-white p-6 rounded-xl shadow-sm border border-gray-100">
             <div>
-                <h1 class="text-2xl font-bold text-blue-800">Data Operasional Kapal</h1>
-                <p class="text-sm text-gray-500 mt-1">Viewer Database Otomatis</p>
+                <h1 class="text-2xl font-bold text-blue-800">Data Inaport 2019-2024</h1>
+                <p class="text-sm text-gray-500 mt-1">19 Pelabuhan</p>
             </div>
             
-            <div class="mt-4 md:mt-0 flex gap-4 items-center">
-                <div class="px-4 py-2 bg-blue-50 rounded-lg border border-blue-100 flex items-center gap-2">
-                    <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                    <span class="text-xs font-medium text-blue-700">Sumber: <span id="db-source-name" class="font-bold">...</span></span>
+            <div class="mt-4 md:mt-0 flex flex-col sm:flex-row gap-4 items-center">
+                <!-- Year Selector -->
+                <div class="relative group">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg class="h-4 w-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                        </svg>
+                    </div>
+                    <select id="yearSelect" class="appearance-none bg-blue-50 border border-blue-200 text-blue-900 text-sm font-bold py-2.5 pl-10 pr-10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer hover:bg-blue-100 transition-all shadow-sm">
+                        <option value="2024" selected>Data Tahun 2024</option>
+                        <option value="2023">Data Tahun 2023</option>
+                        <option value="2022">Data Tahun 2022</option>
+                        <option value="2021">Data Tahun 2021</option>
+                        <option value="2020">Data Tahun 2020</option>
+                        <option value="2019">Data Tahun 2019</option>
+                    </select>
+                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-blue-600">
+                        <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                    </div>
                 </div>
 
-                <button onclick="loadSampleData()" class="text-xs text-blue-600 underline hover:text-blue-800">
-                    Gunakan Data Dummy (Fallback)
-                </button>
+                <div class="px-4 py-2 bg-gray-50 rounded-lg border border-gray-200 flex items-center gap-2">
+                    <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                    <span class="text-xs font-medium text-gray-600">Sumber: <span id="db-source-name" class="font-bold">...</span></span>
+                </div>
+
+                <!-- <button onclick="loadSampleData()" class="text-xs text-blue-600 underline hover:text-blue-800 whitespace-nowrap">
+                    Gunakan Data Dummy
+                </button> -->
             </div>
         </div>
 
@@ -126,7 +146,7 @@
 
     <script>
         // --- KONFIGURASI FILE DATABASE ---
-        const DB_URL = './Data 2024.db'; 
+        let currentDbUrl = './Data 2024.db'; 
         
         // --- KONFIGURASI RUTE & KODE ---
         const portCodes = {
@@ -178,6 +198,7 @@
         ];
 
         let db = null;
+        let dbCache = {}; // Cache untuk menyimpan instance database
         let allData = [];        
         let filteredData = [];   
         let dbColumns = [];      
@@ -189,8 +210,16 @@
         };
 
         window.addEventListener('DOMContentLoaded', () => {
-            document.getElementById('db-source-name').textContent = DB_URL;
+            // document.getElementById('db-source-name').textContent = currentDbUrl; // Dipindah ke autoLoadDatabase
             initRouteOptions(); // Inisialisasi Dropdown
+            
+            // Event Listener Tahun
+            document.getElementById('yearSelect').addEventListener('change', (e) => {
+                const year = e.target.value;
+                currentDbUrl = `./Data ${year}.db`;
+                autoLoadDatabase();
+            });
+
             autoLoadDatabase();
         });
 
@@ -235,20 +264,38 @@
         }
 
         async function autoLoadDatabase() {
-            showLoading(true, "Mengunduh file database...");
+            showLoading(true, `Mengunduh database ${currentDbUrl}...`);
             hideError();
+            
+            // Reset UI: Sembunyikan data lama saat memuat ulang
+            document.getElementById('table-wrapper').classList.add('hidden');
+            document.getElementById('controls').classList.add('hidden');
+            document.getElementById('empty-state').classList.add('hidden');
+
+            document.getElementById('db-source-name').textContent = currentDbUrl;
 
             try {
+                // Cek Cache
+                if (dbCache[currentDbUrl]) {
+                    console.log("Menggunakan database dari cache:", currentDbUrl);
+                    db = dbCache[currentDbUrl];
+                    loadTableData();
+                    return; // Finally akan tetap jalan untuk hide loading
+                }
+
                 const SQL = await initSqlJs(config);
-                const response = await fetch(DB_URL);
+                const response = await fetch(currentDbUrl);
                 
                 if (!response.ok) {
-                    if(response.status === 404) throw new Error(`File '${DB_URL}' tidak ditemukan.`);
+                    if(response.status === 404) throw new Error(`File '${currentDbUrl}' tidak ditemukan.`);
                     throw new Error(`Gagal memuat database (${response.status}).`);
                 }
 
                 const buf = await response.arrayBuffer();
                 db = new SQL.Database(new Uint8Array(buf));
+                
+                // Simpan ke cache
+                dbCache[currentDbUrl] = db;
                 
                 showLoading(true, "Membaca tabel...");
                 loadTableData();
@@ -265,6 +312,12 @@
         async function loadSampleData() {
             showLoading(true, "Membuat Data Dummy...");
             hideError();
+            
+            // Reset UI
+            document.getElementById('table-wrapper').classList.add('hidden');
+            document.getElementById('controls').classList.add('hidden');
+            document.getElementById('empty-state').classList.add('hidden');
+
             document.getElementById('db-source-name').textContent = "Data Dummy (Memori)";
             
             try {
