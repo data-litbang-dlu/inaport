@@ -47,28 +47,35 @@
 
         <div id="error" class="hidden mb-4 p-4 bg-red-50 text-red-700 rounded-lg border border-red-100 font-medium text-sm"></div>
 
-        <div id="controls" class="hidden mb-6 flex flex-col md:flex-row gap-2 justify-between">
-            <div class="flex gap-2 flex-grow">
-                <input type="text" id="searchInput" placeholder="Cari Nama Kapal, Perusahaan, atau Bendera..." 
-                    class="flex-grow md:w-1/3 p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all shadow-sm text-sm">
+        <div id="controls" class="hidden mb-6 flex flex-col gap-4">
+            <div class="flex flex-col md:flex-row gap-2 justify-between w-full">
                 
-                <button id="searchBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg transition-colors shadow-sm flex items-center gap-2">
-                    Cari
-                </button>
+                <div class="flex flex-col md:flex-row gap-2 flex-grow">
+                    <input type="text" id="searchInput" placeholder="Cari Nama Kapal / Perusahaan..." 
+                        class="flex-grow md:flex-grow-0 md:w-1/4 p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm">
+                    
+                    <select id="routeSelect" class="flex-grow md:flex-grow-0 md:w-1/4 p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm bg-white">
+                        <option value="">-- Pilih Rute (Semua) --</option>
+                        </select>
+                    
+                    <button id="searchBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg transition-colors shadow-sm flex items-center justify-center gap-2">
+                        Terapkan
+                    </button>
+                    
+                    <button id="resetBtn" class="bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 font-medium py-2 px-4 rounded-lg transition-colors shadow-sm">
+                        Reset
+                    </button>
+                </div>
                 
-                <button id="resetBtn" class="bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 font-medium py-2 px-4 rounded-lg transition-colors shadow-sm">
-                    Reset
-                </button>
-            </div>
-            
-            <div class="flex items-center gap-2">
-                <span class="text-sm text-gray-600">Baris:</span>
-                <select id="rowsPerPage" class="p-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-blue-500 focus:border-blue-500">
-                    <option value="10">10</option>
-                    <option value="25">25</option>
-                    <option value="50">50</option>
-                    <option value="100">100</option>
-                </select>
+                <div class="flex items-center gap-2 self-end md:self-center">
+                    <span class="text-sm text-gray-600">Baris:</span>
+                    <select id="rowsPerPage" class="p-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-blue-500 focus:border-blue-500">
+                        <option value="10">10</option>
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
             </div>
         </div>
 
@@ -112,16 +119,64 @@
                 </svg>
             </div>
             <h3 class="text-lg font-medium text-gray-900">Tidak ada data</h3>
-            <p class="text-gray-500 mt-1">Gagal memuat database atau tabel kosong.</p>
+            <p class="text-gray-500 mt-1">Gagal memuat database atau hasil pencarian kosong.</p>
         </div>
 
     </div>
 
     <script>
         // --- KONFIGURASI FILE DATABASE ---
-        // Ganti nama file ini sesuai nama file database Anda di folder yang sama
-        const DB_URL = './database.db'; 
+        const DB_URL = './Data 2024.db'; 
         
+        // --- KONFIGURASI RUTE & KODE ---
+        const portCodes = {
+            "Surabaya": "IDSUB",
+            "Banjarmasin": "IDBDJ",
+            "Balikpapan": "IDBPN",
+            "Kumai": "IDKUM",
+            "Sampit": "IDSMQ",
+            "Makassar": "IDMAK",
+            "Lembar": "IDLBR",
+            "Labuan Bajo": "IDLBO",
+            "Maumere": "IDMOF",
+            "Ende": "IDENE",
+            "Kupang": "IDKOE",
+            "Waingapu": "IDWGP",
+            "Semarang": "IDSRG",
+            "Ketapang Kalbar": "IDKTG",
+            "Parepare": "IDPAP",
+            "Baubau": "IDBAU",
+            "Batulicin": "IDKBU",
+            // Penambahan kode standar untuk yang belum ada di list (agar fitur tetap jalan)
+            "Donggala": "IDDGL", 
+            "Pontianak": "IDPNK",
+            "Selayar": "IDSLY"
+        };
+
+        const routeList = [
+            "Surabaya - Banjarmasin", "Banjarmasin - Surabaya",
+            "Surabaya - Balikpapan", "Balikpapan - Surabaya",
+            "Balikpapan - Donggala", "Donggala - Balikpapan",
+            "Surabaya - Kumai", "Kumai - Surabaya",
+            "Surabaya - Sampit", "Sampit - Surabaya",
+            "Surabaya - Makassar", "Makassar - Surabaya",
+            "Surabaya - Lembar", "Lembar - Surabaya",
+            "Surabaya - Labuan Bajo", "Labuan Bajo - Maumere",
+            "Maumere - Labuan Bajo", "Labuan Bajo - Surabaya",
+            "Labuan Bajo - Ende", "Ende - Kupang",
+            "Lembar - Waingapu", "Waingapu - Kupang",
+            "Semarang - Kumai", "Kumai - Semarang",
+            "Semarang - Sampit", "Sampit - Semarang",
+            "Semarang - Pontianak", "Pontianak - Semarang",
+            "Semarang - Ketapang Kalbar", "Ketapang Kalbar - Semarang",
+            "Parepare - Balikpapan", "Balikpapan - Parepare",
+            "Makassar - Baubau", "Baubau - Makassar",
+            "Makassar - Batulicin", "Batulicin - Makassar",
+            "Parepare - Batulicin", "Batulicin - Parepare",
+            "Makassar - Selayar", "Selayar - Baubau",
+            "Baubau - Selayar", "Selayar - Makassar"
+        ];
+
         let db = null;
         let allData = [];        
         let filteredData = [];   
@@ -133,14 +188,16 @@
             locateFile: filename => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${filename}`
         };
 
-        // Init saat halaman diload
         window.addEventListener('DOMContentLoaded', () => {
             document.getElementById('db-source-name').textContent = DB_URL;
+            initRouteOptions(); // Inisialisasi Dropdown
             autoLoadDatabase();
         });
 
         document.getElementById('searchBtn').addEventListener('click', performSearch);
         document.getElementById('resetBtn').addEventListener('click', resetSearch);
+        document.getElementById('routeSelect').addEventListener('change', performSearch); // Trigger search saat dropdown berubah
+        
         document.getElementById('rowsPerPage').addEventListener('change', (e) => {
             rowsPerPage = parseInt(e.target.value);
             currentPage = 1;
@@ -153,22 +210,41 @@
             if (e.key === 'Enter') performSearch();
         });
 
-        // --- FUNGSI BARU UNTUK LOAD OTOMATIS ---
+        function initRouteOptions() {
+            const select = document.getElementById('routeSelect');
+            routeList.forEach(route => {
+                const parts = route.split(" - ");
+                if (parts.length === 2) {
+                    const origin = parts[0];
+                    const destination = parts[1];
+                    
+                    // Kita cari Kode Inaport untuk TUJUAN
+                    const destCode = portCodes[destination];
+                    
+                    if (destCode) {
+                        // Value format: "KODE_TUJUAN|NAMA_ASAL"
+                        // Contoh: "IDSUB|BANJARMASIN" (Untuk rute Banjarmasin - Surabaya)
+                        const optionValue = `${destCode}|${origin}`;
+                        const option = document.createElement('option');
+                        option.value = optionValue;
+                        option.textContent = route;
+                        select.appendChild(option);
+                    }
+                }
+            });
+        }
+
         async function autoLoadDatabase() {
             showLoading(true, "Mengunduh file database...");
             hideError();
 
             try {
                 const SQL = await initSqlJs(config);
-                
-                // Fetch file database dari server/folder
                 const response = await fetch(DB_URL);
                 
                 if (!response.ok) {
-                    if(response.status === 404) {
-                        throw new Error(`File '${DB_URL}' tidak ditemukan. Pastikan nama file benar dan berada satu folder dengan file HTML ini.`);
-                    }
-                    throw new Error(`Gagal memuat database (${response.status}). Pastikan Anda menggunakan Web Server (Live Server/XAMPP), bukan double click file.`);
+                    if(response.status === 404) throw new Error(`File '${DB_URL}' tidak ditemukan.`);
+                    throw new Error(`Gagal memuat database (${response.status}).`);
                 }
 
                 const buf = await response.arrayBuffer();
@@ -195,8 +271,8 @@
                 const SQL = await initSqlJs(config);
                 db = new SQL.Database();
                 
-                // Skema kolom dummy
-                const cols = ["NOMOR PKK", "KAPAL", "PERUSAHAAN", "STATUS", "BENDERA", "DETAIL_BONGKAR_MUAT"];
+                // Menambahkan kolom INAPORT CODE dan TIBA DARI untuk testing filter
+                const cols = ["NOMOR PKK", "KAPAL", "PERUSAHAAN", "STATUS", "BENDERA", "INAPORT CODE", "TIBA DARI", "DETAIL_BONGKAR_MUAT"];
                 db.run(`CREATE TABLE data_operasional (${cols.map(c => `"${c}" TEXT`).join(', ')});`);
 
                 const sampleJson = JSON.stringify({
@@ -204,9 +280,17 @@
                     "MUAT": [{"KOMODITIMUAT": "SEMEN", "JENISMUAT": "Bag", "TONMUAT": "1000", "UNITMUAT": "20000"}]
                 });
 
-                for(let i=1; i<=25; i++) {
+                // Dummy data disesuaikan agar filter bisa dicoba
+                // Contoh 1: Banjarmasin - Surabaya (Tiba di IDSUB dari Banjarmasin)
+                db.run(`INSERT INTO data_operasional VALUES ('PKK-1', 'KM. TEST 01', 'PT. PELAYARAN A', 'SANDAR', 'INDONESIA', 'IDSUB', 'BANJARMASIN', '${sampleJson}')`);
+                
+                // Contoh 2: Surabaya - Banjarmasin (Tiba di IDBDJ dari Surabaya)
+                db.run(`INSERT INTO data_operasional VALUES ('PKK-2', 'KM. TEST 02', 'PT. PELAYARAN B', 'LABUH', 'INDONESIA', 'IDBDJ', 'SURABAYA', '${sampleJson}')`);
+
+                // Isi sisanya random
+                for(let i=3; i<=25; i++) {
                     db.run(`INSERT INTO data_operasional VALUES 
-                    ('PKK-${i}', 'KM. AUTO LOAD ${i}', 'PT. CONTOH ${i}', '${i%2==0?"SANDAR":"LABUH"}', 'INDONESIA', '${sampleJson}')`);
+                    ('PKK-${i}', 'KM. AUTO LOAD ${i}', 'PT. CONTOH ${i}', '${i%2==0?"SANDAR":"LABUH"}', 'INDONESIA', 'IDSUB', 'JAKARTA', '${sampleJson}')`);
                 }
 
                 loadTableData();
@@ -219,33 +303,25 @@
 
         function loadTableData() {
             try {
-                // Cek tabel, sesuaikan nama tabel jika berbeda di DB asli
                 let tableName = "data_operasional";
                 const tables = db.exec("SELECT name FROM sqlite_master WHERE type='table'");
                 
-                // Auto-detect nama tabel jika 'data_operasional' tidak ada
                 if (tables.length > 0 && tables[0].values.length > 0) {
                    const foundTable = tables[0].values.flat().find(t => t === "data_operasional");
-                   if (!foundTable) {
-                       tableName = tables[0].values[0][0]; // Pakai tabel pertama yang ditemukan
-                       console.log("Menggunakan tabel alternatif: " + tableName);
-                   }
+                   if (!foundTable) tableName = tables[0].values[0][0];
                 } else {
-                    throw new Error("Database kosong (tidak ada tabel).");
+                    throw new Error("Database kosong.");
                 }
 
+                // Query dasar
                 const result = db.exec(`SELECT * FROM "${tableName}"`);
-                if (result.length === 0 || result[0].values.length === 0) {
-                    throw new Error(`Tabel '${tableName}' ditemukan tapi kosong.`);
-                }
+                if (result.length === 0 || result[0].values.length === 0) throw new Error(`Tabel '${tableName}' kosong.`);
 
                 dbColumns = result[0].columns;
                 allData = result[0].values; 
-                filteredData = [...allData]; 
-                currentPage = 1;
-
-                renderHeader(dbColumns);
-                renderCurrentPage();
+                
+                // Terapkan search jika ada input tersimpan, jika tidak reset
+                performSearch();
 
                 document.getElementById('empty-state').classList.add('hidden');
                 document.getElementById('table-wrapper').classList.remove('hidden');
@@ -265,6 +341,69 @@
                 th.innerText = col.replace(/_/g, ' ');
                 thead.appendChild(th);
             });
+        }
+
+        function performSearch() {
+            const textInput = document.getElementById('searchInput').value.toUpperCase();
+            const routeInput = document.getElementById('routeSelect').value; // Format: "CODE|ORIGIN"
+            
+            let routeDestCode = "";
+            let routeOriginName = "";
+
+            if (routeInput) {
+                const parts = routeInput.split('|');
+                routeDestCode = parts[0];
+                routeOriginName = parts[1].toUpperCase();
+            }
+
+            // Cari index kolom penting
+            const idxInaport = dbColumns.indexOf("INAPORT CODE");
+            const idxTibaDari = dbColumns.indexOf("TIBA DARI");
+            
+            // Validasi jika kolom tidak ditemukan di database
+            const isRouteFilterActive = routeInput && idxInaport !== -1 && idxTibaDari !== -1;
+
+            filteredData = allData.filter(row => {
+                // 1. Filter Text (Global)
+                const matchesText = textInput === "" || row.some(cell => String(cell).toUpperCase().includes(textInput));
+                
+                // 2. Filter Rute (Spesifik)
+                let matchesRoute = true;
+                if (isRouteFilterActive) {
+                    const cellCode = String(row[idxInaport] || "").toUpperCase();
+                    const cellOrigin = String(row[idxTibaDari] || "").toUpperCase();
+                    
+                    // Logic: WHERE "INAPORT CODE" = ID... AND "TIBA DARI" LIKE %ASAL%
+                    matchesRoute = (cellCode === routeDestCode) && (cellOrigin.includes(routeOriginName));
+                }
+
+                return matchesText && matchesRoute;
+            });
+
+            if (routeInput && (idxInaport === -1 || idxTibaDari === -1)) {
+                console.warn("Kolom 'INAPORT CODE' atau 'TIBA DARI' tidak ditemukan di database. Filter rute diabaikan.");
+            }
+
+            currentPage = 1;
+            renderHeader(dbColumns); // Render header ulang (opsional)
+            renderCurrentPage();
+
+            // Tampilkan empty state jika hasil filter 0
+            if (filteredData.length === 0) {
+                document.getElementById('table-wrapper').classList.add('hidden');
+                document.getElementById('empty-state').classList.remove('hidden');
+                document.querySelector('#empty-state h3').innerText = "Data tidak ditemukan";
+                document.querySelector('#empty-state p').innerText = "Coba ubah kata kunci atau filter rute.";
+            } else {
+                document.getElementById('table-wrapper').classList.remove('hidden');
+                document.getElementById('empty-state').classList.add('hidden');
+            }
+        }
+
+        function resetSearch() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('routeSelect').selectedIndex = 0;
+            performSearch();
         }
 
         function renderCurrentPage() {
@@ -310,26 +449,6 @@
 
         function changePage(direction) {
             currentPage += direction;
-            renderCurrentPage();
-        }
-
-        function performSearch() {
-            const input = document.getElementById('searchInput').value.toUpperCase();
-            if (!input) {
-                filteredData = [...allData];
-            } else {
-                filteredData = allData.filter(row => {
-                    return row.some(cell => String(cell).toUpperCase().includes(input));
-                });
-            }
-            currentPage = 1;
-            renderCurrentPage();
-        }
-
-        function resetSearch() {
-            document.getElementById('searchInput').value = '';
-            filteredData = [...allData];
-            currentPage = 1;
             renderCurrentPage();
         }
 
