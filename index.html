@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Operasional Viewer (SQLite) - Pagination</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+    <style>
+        .table-container::-webkit-scrollbar { height: 12px; width: 12px; }
+        .table-container::-webkit-scrollbar-track { background: #f1f1f1; }
+        .table-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 6px; }
+        .table-container::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .sub-table th, .sub-table td { font-size: 0.75rem; padding: 4px 8px; border: 1px solid #e2e8f0; }
+        .sub-table th { background-color: #f8fafc; font-weight: 600; color: #475569; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans">
+
+    <div class="container mx-auto px-4 py-8 max-w-[95%]">
+        
+        <div class="mb-8 flex flex-col md:flex-row justify-between items-center bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+            <div>
+                <h1 class="text-2xl font-bold text-blue-800">Data Operasional Kapal</h1>
+                <p class="text-sm text-gray-500 mt-1">Viewer Database SQLite Lokal</p>
+            </div>
+            
+            <div class="mt-4 md:mt-0 flex gap-4 items-center">
+                <label class="block">
+                    <span class="sr-only">Pilih File Database</span>
+                    <input type="file" id="dbfile" class="block w-full text-sm text-gray-500
+                      file:mr-4 file:py-2 file:px-4
+                      file:rounded-full file:border-0
+                      file:text-sm file:font-semibold
+                      file:bg-blue-50 file:text-blue-700
+                      hover:file:bg-blue-100 cursor-pointer
+                    " accept=".db, .sqlite, .sqlite3"/>
+                </label>
+                <button onclick="loadSampleData()" class="text-xs text-blue-600 underline hover:text-blue-800">
+                    Gunakan Data Dummy
+                </button>
+            </div>
+        </div>
+
+        <div id="status" class="hidden mb-4 p-4 bg-blue-50 text-blue-700 rounded-lg border border-blue-100 animate-pulse flex items-center gap-2">
+            <svg class="animate-spin h-5 w-5 text-blue-700" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Sedang memproses database...
+        </div>
+
+        <div id="error" class="hidden mb-4 p-4 bg-red-50 text-red-700 rounded-lg border border-red-100 font-medium text-sm"></div>
+
+        <div id="controls" class="hidden mb-6 flex flex-col md:flex-row gap-2 justify-between">
+            <div class="flex gap-2 flex-grow">
+                <input type="text" id="searchInput" placeholder="Cari Nama Kapal, Perusahaan, atau Bendera..." 
+                    class="flex-grow md:w-1/3 p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all shadow-sm text-sm">
+                
+                <button id="searchBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg transition-colors shadow-sm flex items-center gap-2">
+                    Cari
+                </button>
+                
+                <button id="resetBtn" class="bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 font-medium py-2 px-4 rounded-lg transition-colors shadow-sm">
+                    Reset
+                </button>
+            </div>
+            
+            <div class="flex items-center gap-2">
+                <span class="text-sm text-gray-600">Baris:</span>
+                <select id="rowsPerPage" class="p-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-blue-500 focus:border-blue-500">
+                    <option value="10">10</option>
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="table-wrapper" class="hidden bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
+            <div class="table-container overflow-x-auto min-h-[300px]">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-slate-800 text-white sticky top-0 z-10 shadow-sm">
+                        <tr id="table-headers" class="text-xs uppercase tracking-wider whitespace-nowrap">
+                            </tr>
+                    </thead>
+                    <tbody id="table-body" class="text-sm divide-y divide-gray-200">
+                        </tbody>
+                </table>
+            </div>
+            
+            <div id="pagination-controls" class="p-4 bg-gray-50 border-t border-gray-200 flex flex-col md:flex-row justify-between items-center gap-4">
+                <div class="text-sm text-gray-600">
+                    Menampilkan <span id="start-row" class="font-bold">0</span> - <span id="end-row" class="font-bold">0</span> dari <span id="total-rows" class="font-bold">0</span> data
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <button id="btnPrev" class="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                        &larr; Sebelumnya
+                    </button>
+                    
+                    <span id="page-indicator" class="text-sm font-medium text-gray-700 px-2">
+                        Halaman 1
+                    </span>
+                    
+                    <button id="btnNext" class="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                        Selanjutnya &rarr;
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="empty-state" class="text-center py-20">
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
+                <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path>
+                </svg>
+            </div>
+            <h3 class="text-lg font-medium text-gray-900">Belum ada data</h3>
+            <p class="text-gray-500 mt-1 max-w-sm mx-auto">Silakan upload file database (.db/.sqlite) Anda.</p>
+        </div>
+
+    </div>
+
+    <script>
+        let db = null;
+        
+        // --- State Pagination Global ---
+        let allData = [];         // Menyimpan SEMUA data mentah dari DB
+        let filteredData = [];    // Menyimpan data setelah difilter search
+        let dbColumns = [];       // Nama-nama kolom
+        let currentPage = 1;
+        let rowsPerPage = 10;
+
+        // Kolom wajib untuk referensi (saat dummy data)
+        const requiredColumns = [
+            "NOMOR PKK", "NOMOR LK3", "NOMOR SPB", "KAPAL", "PERUSAHAAN", "JENIS KAPAL", 
+            "DWT", "GT", "LOA", "DRAFT MAX", "DRAFT DEPAN", "DRAFT BELAKANG", "DRAFT TENGAH", 
+            "KETINGGIAN UDARA", "STATUS", "BENDERA", "TRAYEK", "TIBA DARI", "TIBA TANGGAL", 
+            "TIBA SANDAR", "BERANGKAT KE", "BERANGKAT TANGGAL", "BERANGKAT TOLAK", "NTPN", 
+            "NILAI", "MUATAN", "JUMLAH AWAK", "WAKTU RESPON", "BONGKAR ORANG", "MUAT ORANG", 
+            "DETAIL_BONGKAR_MUAT"
+        ];
+
+        // Konfigurasi SQL.js
+        const config = {
+            locateFile: filename => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${filename}`
+        };
+
+        // Event Listeners
+        document.getElementById('dbfile').addEventListener('change', handleFileUpload);
+        document.getElementById('searchBtn').addEventListener('click', performSearch);
+        document.getElementById('resetBtn').addEventListener('click', resetSearch);
+        document.getElementById('rowsPerPage').addEventListener('change', (e) => {
+            rowsPerPage = parseInt(e.target.value);
+            currentPage = 1;
+            renderCurrentPage();
+        });
+        document.getElementById('btnPrev').addEventListener('click', () => changePage(-1));
+        document.getElementById('btnNext').addEventListener('click', () => changePage(1));
+        
+        document.getElementById('searchInput').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') performSearch();
+        });
+
+        async function handleFileUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            showLoading(true);
+            hideError();
+            try {
+                const SQL = await initSqlJs(config);
+                const r = new FileReader();
+                r.onload = function() {
+                    try {
+                        const Uints = new Uint8Array(r.result);
+                        db = new SQL.Database(Uints);
+                        loadTableData();
+                    } catch (err) {
+                        showError("Gagal membaca file database.");
+                        console.error(err);
+                    } finally {
+                        showLoading(false);
+                    }
+                }
+                r.readAsArrayBuffer(file);
+            } catch (err) {
+                console.error(err);
+                showError("Gagal inisialisasi SQL.js");
+                showLoading(false);
+            }
+        }
+
+        async function loadSampleData() {
+            showLoading(true);
+            try {
+                const SQL = await initSqlJs(config);
+                db = new SQL.Database();
+                let createQuery = `CREATE TABLE data_operasional (${requiredColumns.map(c => `"${c}" TEXT`).join(', ')});`;
+                db.run(createQuery);
+
+                // Buat lebih banyak data dummy untuk tes pagination
+                const sampleJson = JSON.stringify({
+                    "BONGKAR": [{"KOMODITIBONGKAR": "KOPRA", "JENISBONGKAR": "Unitized", "TONBONGKAR": "100", "M3BONGKAR": "0", "UNITBONGKAR": "400"}], 
+                    "MUAT": [{"KOMODITIMUAT": "GENERAL CARGO", "JENISMUAT": "Unitized", "TONMUAT": "650", "M3MUAT": "0", "UNITMUAT": "750"}]
+                });
+
+                // Insert 25 baris dummy
+                for(let i=1; i<=25; i++) {
+                    db.run(`INSERT INTO data_operasional ("NOMOR PKK", "KAPAL", "PERUSAHAAN", "STATUS", "BENDERA", "DETAIL_BONGKAR_MUAT") VALUES 
+                    ('PKK-00${i}', 'KM. CONTOH ${i}', 'PT. PELAYARAN ${i}', '${i%2==0?"SANDAR":"LABUH"}', 'INDONESIA', '${sampleJson}')`);
+                }
+
+                loadTableData();
+            } catch (e) {
+                showError("Gagal membuat data dummy: " + e.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Fungsi ini hanya mengambil data dari SQL ke Memory (Array)
+        function loadTableData() {
+            try {
+                const checkTable = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='data_operasional'");
+                if (checkTable.length === 0) {
+                    showError("Tabel 'data_operasional' tidak ditemukan.");
+                    return;
+                }
+
+                const result = db.exec("SELECT * FROM data_operasional");
+                if (result.length === 0 || result[0].values.length === 0) {
+                    showError("Tabel ditemukan tapi kosong.");
+                    return;
+                }
+
+                // Simpan ke variabel global
+                dbColumns = result[0].columns;
+                allData = result[0].values; 
+                
+                // Reset state filter & pagination
+                filteredData = [...allData]; // Mula-mula filtered sama dengan semua data
+                currentPage = 1;
+
+                // Setup UI Header
+                renderHeader(dbColumns);
+                
+                // Render Halaman Pertama
+                renderCurrentPage();
+
+                // Tampilkan container
+                document.getElementById('empty-state').classList.add('hidden');
+                document.getElementById('table-wrapper').classList.remove('hidden');
+                document.getElementById('controls').classList.remove('hidden');
+
+            } catch (err) {
+                showError("Error loading data: " + err.message);
+            }
+        }
+
+        function renderHeader(columns) {
+            const thead = document.getElementById('table-headers');
+            thead.innerHTML = '';
+            columns.forEach(col => {
+                const th = document.createElement('th');
+                th.className = "px-6 py-3 text-left text-xs font-medium uppercase tracking-wider border-b border-gray-700";
+                th.innerText = col.replace(/_/g, ' ');
+                thead.appendChild(th);
+            });
+        }
+
+        // Fungsi Inti Pagination: Render baris berdasarkan page saat ini
+        function renderCurrentPage() {
+            const tbody = document.getElementById('table-body');
+            tbody.innerHTML = '';
+
+            const totalItems = filteredData.length;
+            const totalPages = Math.ceil(totalItems / rowsPerPage);
+
+            // Validasi page
+            if (currentPage < 1) currentPage = 1;
+            if (currentPage > totalPages && totalPages > 0) currentPage = totalPages;
+
+            // Hitung index start & end
+            const startIndex = (currentPage - 1) * rowsPerPage;
+            const endIndex = Math.min(startIndex + rowsPerPage, totalItems);
+
+            // Ambil potongan data
+            const pageData = filteredData.slice(startIndex, endIndex);
+
+            // Render Baris HTML
+            pageData.forEach((row, index) => {
+                const tr = document.createElement('tr');
+                tr.className = index % 2 === 0 ? 'bg-white hover:bg-blue-50' : 'bg-gray-50 hover:bg-blue-50';
+                
+                row.forEach((cell, i) => {
+                    const td = document.createElement('td');
+                    td.className = "px-6 py-4 whitespace-nowrap border-b border-gray-100 text-gray-700 align-top";
+                    
+                    if (dbColumns[i].toUpperCase() === "DETAIL_BONGKAR_MUAT") {
+                        td.innerHTML = formatDetailJSON(cell);
+                    } else {
+                        td.textContent = cell !== null ? cell : '-';
+                    }
+                    tr.appendChild(td);
+                });
+                tbody.appendChild(tr);
+            });
+
+            // Update Text Info & Tombol
+            document.getElementById('start-row').innerText = totalItems === 0 ? 0 : startIndex + 1;
+            document.getElementById('end-row').innerText = endIndex;
+            document.getElementById('total-rows').innerText = totalItems;
+            document.getElementById('page-indicator').innerText = `Halaman ${currentPage} dari ${totalPages || 1}`;
+
+            document.getElementById('btnPrev').disabled = currentPage <= 1;
+            document.getElementById('btnNext').disabled = currentPage >= totalPages;
+        }
+
+        function changePage(direction) {
+            currentPage += direction;
+            renderCurrentPage();
+        }
+
+        // Logic Search yang baru (memfilter Array, bukan DOM)
+        function performSearch() {
+            const input = document.getElementById('searchInput').value.toUpperCase();
+            
+            if (!input) {
+                filteredData = [...allData];
+            } else {
+                filteredData = allData.filter(row => {
+                    // Cek setiap kolom dalam baris
+                    return row.some(cell => {
+                        return String(cell).toUpperCase().includes(input);
+                    });
+                });
+            }
+            
+            currentPage = 1; // Reset ke halaman 1 hasil pencarian
+            renderCurrentPage();
+        }
+
+        function resetSearch() {
+            document.getElementById('searchInput').value = '';
+            filteredData = [...allData];
+            currentPage = 1;
+            renderCurrentPage();
+        }
+
+        function formatDetailJSON(jsonInput) {
+            if (!jsonInput) return '<span class="text-gray-400">-</span>';
+            try {
+                let data;
+                if (typeof jsonInput === 'object') data = jsonInput;
+                else data = JSON.parse(jsonInput);
+                if (typeof data === 'string') try { data = JSON.parse(data); } catch(e) {}
+
+                let html = '<div class="flex flex-col gap-3 min-w-[300px] max-w-[500px]">';
+                let hasContent = false;
+
+                if (data.BONGKAR && Array.isArray(data.BONGKAR) && data.BONGKAR.length > 0) {
+                    hasContent = true;
+                    html += `
+                    <div class="bg-green-50 p-2 rounded border border-green-200 shadow-sm">
+                        <div class="flex items-center gap-1 mb-1">
+                            <span class="text-xs font-bold text-green-800 bg-green-200 px-2 py-0.5 rounded">BONGKAR ⬇️</span>
+                        </div>
+                        <table class="w-full sub-table bg-white">
+                            <thead><tr><th>Komoditi</th><th>Jenis</th><th class="text-right">Ton</th><th class="text-right">Unit</th></tr></thead>
+                            <tbody>${data.BONGKAR.map(item => `<tr><td class="font-medium text-gray-700">${item.KOMODITIBONGKAR || '-'}</td><td class="text-xs text-gray-500">${item.JENISBONGKAR || '-'}</td><td class="text-right font-mono">${item.TONBONGKAR || '0'}</td><td class="text-right font-mono">${item.UNITBONGKAR || '0'}</td></tr>`).join('')}</tbody>
+                        </table>
+                    </div>`;
+                }
+
+                if (data.MUAT && Array.isArray(data.MUAT) && data.MUAT.length > 0) {
+                    hasContent = true;
+                    html += `
+                    <div class="bg-blue-50 p-2 rounded border border-blue-200 shadow-sm">
+                        <div class="flex items-center gap-1 mb-1">
+                            <span class="text-xs font-bold text-blue-800 bg-blue-200 px-2 py-0.5 rounded">MUAT ⬆️</span>
+                        </div>
+                        <table class="w-full sub-table bg-white">
+                            <thead><tr><th>Komoditi</th><th>Jenis</th><th class="text-right">Ton</th><th class="text-right">Unit</th></tr></thead>
+                            <tbody>${data.MUAT.map(item => `<tr><td class="font-medium text-gray-700">${item.KOMODITIMUAT || '-'}</td><td class="text-xs text-gray-500">${item.JENISMUAT || '-'}</td><td class="text-right font-mono">${item.TONMUAT || '0'}</td><td class="text-right font-mono">${item.UNITMUAT || '0'}</td></tr>`).join('')}</tbody>
+                        </table>
+                    </div>`;
+                }
+                html += '</div>';
+                return hasContent ? html : '<span class="text-gray-400 italic">-</span>';
+            } catch (e) {
+                return `<span class="text-red-500 text-xs font-bold">⚠️ Invalid Format</span>`;
+            }
+        }
+
+        function showLoading(isLoading) {
+            const el = document.getElementById('status');
+            if (isLoading) el.classList.remove('hidden');
+            else el.classList.add('hidden');
+        }
+
+        function showError(msg) {
+            const el = document.getElementById('error');
+            el.textContent = msg;
+            el.classList.remove('hidden');
+            setTimeout(() => el.classList.add('hidden'), 7000);
+        }
+        
+        function hideError() {
+            document.getElementById('error').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
