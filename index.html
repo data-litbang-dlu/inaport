@@ -153,7 +153,7 @@
         // --- KONFIGURASI FILE ---
         let currentDbUrl = 'Data 2024.parquet'; 
         
-        // --- KONFIGURASI RUTE (Tetap Sama) ---
+        // --- KONFIGURASI RUTE ---
         const portCodes = {
             "Surabaya": "IDSUB", "Banjarmasin": "IDBDJ", "Balikpapan": "IDBPN", "Kumai": "IDKUM",
             "Sampit": "IDSMQ", "Makassar": "IDMAK", "Lembar": "IDLBR", "Labuan Bajo": "IDLBO",
@@ -188,7 +188,6 @@
         // --- INISIALISASI DUCKDB ---
         async function initDuckDB() {
             try {
-                // console.log("🚀 Memulai DuckDB...");
                 const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
                 const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
                 
@@ -203,15 +202,13 @@
                 await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
                 conn = await db.connect();
                 
-                // console.log("✅ DuckDB Siap!");
                 autoLoadDatabase();
             } catch (err) {
-                // console.error(err);
                 showError("Gagal Inisialisasi DuckDB: " + err.message);
             }
         }
 
-        // --- LOAD DATABASE (VERSI PEMBAHARUAN: FORCE MATERIALIZATION) ---
+        // --- LOAD DATABASE ---
         async function autoLoadDatabase() {
             showLoading(true, `Mengunduh ${currentDbUrl}...`);
             hideError();
@@ -223,46 +220,27 @@
 
             try {
                 if (!db || !conn) return;
-
-                // console.log(`📡 Fetching file: ${currentDbUrl}`);
                 
-                // 1. Download File
                 const response = await fetch(currentDbUrl);
                 if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
                 const arrayBuffer = await response.arrayBuffer();
                 
-                // console.log("✅ Download Selesai. Bytes:", arrayBuffer.byteLength);
-
                 if (arrayBuffer.byteLength === 0) throw new Error("File kosong (0 bytes).");
 
                 showLoading(true, "Membangun Tabel Data...");
 
-                // 2. Register Buffer dengan nama yang AMAN (tanpa spasi/karakter aneh)
-                // Kita pakai nama fix 'temp_source.parquet' agar DuckDB tidak bingung dengan URL
                 await db.registerFileBuffer('temp_source.parquet', new Uint8Array(arrayBuffer));
                 
-                // 3. DEBUG: Cek apakah DuckDB mengenali skema/kolomnya
-                // console.log("🔍 Menganalisis Struktur Parquet...");
-                const schemaCheck = await conn.query(`DESCRIBE SELECT * FROM read_parquet('temp_source.parquet')`);
-                // console.table(schemaCheck.toArray().map(r => r.toJSON()));
-
-                // 4. STRATEGI BARU: Buat Tabel Internal (Materialize)
-                // Ini memaksa DuckDB membongkar parquet dan menyimpannya di memori sebagai tabel SQL biasa
-                // console.log("⚙️ Membuat Tabel Internal...");
                 await conn.query(`DROP TABLE IF EXISTS my_table`); 
                 await conn.query(`CREATE TABLE my_table AS SELECT * FROM read_parquet('temp_source.parquet')`);
                 
-                // 5. Query dari TABEL (bukan dari file)
-                // Kita juga cek jumlah baris dulu
                 const countResult = await conn.query(`SELECT count(*) as total FROM my_table`);
                 const totalRows = Number(countResult.toArray()[0].toJSON().total);
-                // console.log(`📊 Total Baris Terdeteksi: ${totalRows}`);
 
                 if (totalRows === 0) {
-                    throw new Error("Parquet terbaca tapi isinya 0 baris. Kemungkinan kesalahan saat export Python.");
+                    throw new Error("Parquet terbaca tapi isinya 0 baris.");
                 }
 
-                // Ambil data
                 const result = await conn.query(`SELECT * FROM my_table`);
                 const arrowJson = result.toArray().map(r => r.toJSON());
 
@@ -271,7 +249,6 @@
                     allData = arrowJson.map(row => {
                         return dbColumns.map(col => {
                             let val = row[col];
-                            // Handle BigInt aman
                             if (typeof val === 'bigint') return val.toString();
                             return val;
                         });
@@ -286,19 +263,14 @@
                 document.getElementById('controls').classList.remove('hidden');
 
             } catch (err) {
-                // console.error("❌ ERROR:", err);
                 showError(`Gagal memuat data: <br>${err.message}`);
                 document.getElementById('empty-state').classList.remove('hidden');
             } finally {
                 showLoading(false);
-                // Bersihkan memori file buffer jika perlu (opsional)
-                // await db.registerFileBuffer('temp_source.parquet', new Uint8Array([])); 
             }
         }
-        // --- Event Listeners & Helper Functions tetap sama seperti sebelumnya ---
-        // (Copy bagian bawah dari kode sebelumnya: Event Listeners, performSearch, dll)
-        
-        // --- Copy-Paste Helper Functions di sini ---
+
+        // --- SETUP EVENT LISTENERS ---
         window.addEventListener('DOMContentLoaded', () => {
             initRouteOptions();
             initDuckDB();
@@ -309,6 +281,7 @@
             autoLoadDatabase();
         });
 
+        // Make functions globally available for inline onclick attributes if needed
         window.performSearch = performSearch;
         window.resetSearch = resetSearch;
         window.changePage = changePage;
@@ -329,6 +302,8 @@
             if (e.key === 'Enter') performSearch();
         });
 
+        // --- REVISI: INIT ROUTE OPTIONS ---
+        // Sekarang menyimpan KODE|KODE (Contoh: IDSUB|IDBDJ)
         function initRouteOptions() {
             const select = document.getElementById('routeSelect');
             routeList.forEach(route => {
@@ -336,9 +311,14 @@
                 if (parts.length === 2) {
                     const origin = parts[0];
                     const destination = parts[1];
-                    const destCode = portCodes[destination];
-                    if (destCode) {
-                        const optionValue = `${destCode}|${origin}`;
+                    
+                    const originCode = portCodes[origin];      // Ambil kode asal
+                    const destCode = portCodes[destination];   // Ambil kode tujuan
+
+                    // Pastikan kedua kode ada dalam daftar portCodes
+                    if (destCode && originCode) {
+                        // Value format: TUJUAN_CODE|ASAL_CODE
+                        const optionValue = `${destCode}|${originCode}`;
                         const option = document.createElement('option');
                         option.value = optionValue;
                         option.textContent = route;
@@ -359,31 +339,39 @@
             });
         }
 
+        // --- REVISI: PERFORM SEARCH ---
+        // Sekarang menggunakan "TIBA DARI CODE"
         function performSearch() {
             const textInput = document.getElementById('searchInput').value.toUpperCase();
             const routeInput = document.getElementById('routeSelect').value;
             
             let routeDestCode = "";
-            let routeOriginName = "";
+            let routeOriginCode = "";
 
             if (routeInput) {
                 const parts = routeInput.split('|');
-                routeDestCode = parts[0];
-                routeOriginName = parts[1].toUpperCase();
+                routeDestCode = parts[0]; // Kode Tujuan (INAPORT CODE)
+                routeOriginCode = parts[1]; // Kode Asal (TIBA DARI CODE)
             }
 
             const idxInaport = dbColumns.indexOf("INAPORT CODE");
-            const idxTibaDari = dbColumns.indexOf("TIBA DARI");
             
+            // --- PERUBAHAN DISINI: Menggunakan "TIBA DARI CODE" ---
+            const idxTibaDari = dbColumns.indexOf("TIBA DARI CODE"); 
+            
+            // Pastikan kolom ditemukan
             const isRouteFilterActive = routeInput && idxInaport !== -1 && idxTibaDari !== -1;
 
             filteredData = allData.filter(row => {
                 const matchesText = textInput === "" || row.some(cell => String(cell).toUpperCase().includes(textInput));
+                
                 let matchesRoute = true;
                 if (isRouteFilterActive) {
-                    const cellCode = String(row[idxInaport] || "").toUpperCase();
+                    const cellInaport = String(row[idxInaport] || "").toUpperCase();
                     const cellOrigin = String(row[idxTibaDari] || "").toUpperCase();
-                    matchesRoute = (cellCode === routeDestCode) && (cellOrigin.includes(routeOriginName));
+                    
+                    // Bandingkan secara EXACT (persis) karena sesama kode 5 huruf
+                    matchesRoute = (cellInaport === routeDestCode) && (cellOrigin === routeOriginCode);
                 }
                 return matchesText && matchesRoute;
             });
