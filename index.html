@@ -40,6 +40,7 @@
                         <option value="2021">Data Tahun 2021</option>
                         <option value="2020">Data Tahun 2020</option>
                         <option value="2019">Data Tahun 2019</option>
+                        <option value="2019-2024">Data Tahun 2019-2024</option>
                     </select>
                     <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-blue-600">
                         <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
@@ -49,6 +50,11 @@
                 <div class="px-4 py-2 bg-gray-50 rounded-lg border border-gray-200 flex items-center gap-2">
                     <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
                     <span class="text-xs font-medium text-gray-600">Sumber: <span id="db-source-name" class="font-bold">...</span></span>
+                </div>
+
+                <div id="header-count" class="px-4 py-2 bg-gray-50 rounded-lg border border-gray-200 flex items-center gap-2">
+                    <span class="text-xs font-medium text-gray-600">Jumlah data: <span id="db-filtered-count" class="font-bold">0</span>
+                    </span>
                 </div>
 
                 <!-- <button onclick="loadSampleData()" class="text-xs text-blue-600 underline hover:text-blue-800 whitespace-nowrap">
@@ -94,6 +100,7 @@
                         <option value="25">25</option>
                         <option value="50">50</option>
                         <option value="100">100</option>
+                        <option value="500">500</option>
                     </select>
                 </div>
             </div>
@@ -375,6 +382,8 @@
                 
                 // Terapkan search jika ada input tersimpan, jika tidak reset
                 performSearch();
+                // Update header top counts (total and filtered updated by performSearch)
+                // Note: performSearch will update filtered count via updateTopRowCount()
 
                 document.getElementById('empty-state').classList.add('hidden');
                 document.getElementById('table-wrapper').classList.remove('hidden');
@@ -440,6 +449,9 @@
             currentPage = 1;
             renderHeader(dbColumns); // Render header ulang (opsional)
             renderCurrentPage();
+
+            // Update header top counts with both total and filtered
+            updateTopRowCount(allData.length || 0, filteredData.length || 0);
 
             // Tampilkan empty state jika hasil filter 0
             if (filteredData.length === 0) {
@@ -521,7 +533,7 @@
                     html += `
                     <div class="bg-green-50 p-2 rounded border border-green-200 shadow-sm">
                         <div class="flex items-center gap-1 mb-1">
-                            <span class="text-xs font-bold text-green-800 bg-green-200 px-2 py-0.5 rounded">BONGKAR ⬇️</span>
+                            <span class="text-xs font-bold text-green-800 bg-green-200 px-2 py-0.5 rounded">BONGKAR</span>
                         </div>
                         <table class="w-full sub-table bg-white">
                             <thead><tr><th>Komoditi</th><th>Jenis</th><th class="text-right">Ton</th><th class="text-right">Unit</th></tr></thead>
@@ -535,7 +547,7 @@
                     html += `
                     <div class="bg-blue-50 p-2 rounded border border-blue-200 shadow-sm">
                         <div class="flex items-center gap-1 mb-1">
-                            <span class="text-xs font-bold text-blue-800 bg-blue-200 px-2 py-0.5 rounded">MUAT ⬆️</span>
+                            <span class="text-xs font-bold text-blue-800 bg-blue-200 px-2 py-0.5 rounded">MUAT</span>
                         </div>
                         <table class="w-full sub-table bg-white">
                             <thead><tr><th>Komoditi</th><th>Jenis</th><th class="text-right">Ton</th><th class="text-right">Unit</th></tr></thead>
@@ -557,10 +569,20 @@
             else el.classList.add('hidden');
         }
 
+        // Update the header box that shows jumlah data (filtered / total)
+        function updateTopRowCount(totalCount, filteredCount) {
+            const totalEl = document.getElementById('db-total-count');
+            const filteredEl = document.getElementById('db-filtered-count');
+            if (totalEl) totalEl.innerText = totalCount || 0;
+            if (filteredEl) filteredEl.innerText = filteredCount || 0;
+        }
+
         function showError(msg) {
             const el = document.getElementById('error');
             el.innerHTML = `<strong>Error:</strong> ${msg}`;
             el.classList.remove('hidden');
+            // Reset header counts if there's an error or no data
+            updateTopRowCount(0, 0);
         }
         
         function hideError() {
