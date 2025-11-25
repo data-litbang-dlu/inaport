@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Data Inaport</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
     <style>
         .table-container::-webkit-scrollbar { height: 12px; width: 12px; }
         .table-container::-webkit-scrollbar-track { background: #f1f1f1; }
@@ -34,12 +33,13 @@
                         </svg>
                     </div>
                     <select id="yearSelect" class="appearance-none bg-blue-50 border border-blue-200 text-blue-900 text-sm font-bold py-2.5 pl-10 pr-10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer hover:bg-blue-100 transition-all shadow-sm">
-                        <option value="2024" selected>Data Tahun 2024</option>
-                        <option value="2023">Data Tahun 2023</option>
-                        <option value="2022">Data Tahun 2022</option>
-                        <option value="2021">Data Tahun 2021</option>
-                        <option value="2020">Data Tahun 2020</option>
-                        <option value="2019">Data Tahun 2019</option>
+                        <option value="Data 2024.parquet" selected>Data Tahun 2024</option>
+                        <option value="Data 2023.parquet">Data Tahun 2023</option>
+                        <option value="Data 2022.parquet">Data Tahun 2022</option>
+                        <option value="Data 2021.parquet">Data Tahun 2021</option>
+                        <option value="Data 2020.parquet">Data Tahun 2020</option>
+                        <option value="Data 2019.parquet">Data Tahun 2019</option>
+                        <option value="Data 2019-2024.parquet">Semua Data (2019-2024)</option>
                     </select>
                     <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-blue-600">
                         <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
@@ -55,10 +55,6 @@
                     <span class="text-xs font-medium text-gray-600">Jumlah data: <span id="db-filtered-count" class="font-bold">0</span>
                     </span>
                 </div>
-
-                <!-- <button onclick="loadSampleData()" class="text-xs text-blue-600 underline hover:text-blue-800 whitespace-nowrap">
-                    Gunakan Data Dummy
-                </button> -->
             </div>
         </div>
 
@@ -67,7 +63,7 @@
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
-            <span id="status-text">Menghubungkan ke server...</span>
+            <span id="status-text">Menghubungkan ke DuckDB...</span>
         </div>
 
         <div id="error" class="hidden mb-4 p-4 bg-red-50 text-red-700 rounded-lg border border-red-100 font-medium text-sm"></div>
@@ -150,97 +146,184 @@
 
     </div>
 
-    <script>
-        // --- KONFIGURASI FILE DATABASE ---
-        let currentDbUrl = './Data 2024.db'; 
+    <script type="module">
+        import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/+esm';
+
+        // --- KONFIGURASI FILE ---
+        let currentDbUrl = 'Data 2024.parquet'; 
         
-        // --- KONFIGURASI RUTE & KODE ---
+        // --- KONFIGURASI RUTE (Tetap Sama) ---
         const portCodes = {
-            "Surabaya": "IDSUB",
-            "Banjarmasin": "IDBDJ",
-            "Balikpapan": "IDBPN",
-            "Kumai": "IDKUM",
-            "Sampit": "IDSMQ",
-            "Makassar": "IDMAK",
-            "Lembar": "IDLBR",
-            "Labuan Bajo": "IDLBO",
-            "Maumere": "IDMOF",
-            "Ende": "IDENE",
-            "Kupang": "IDKOE",
-            "Waingapu": "IDWGP",
-            "Semarang": "IDSRG",
-            "Ketapang Kalbar": "IDKTG",
-            "Parepare": "IDPAP",
-            "Baubau": "IDBAU",
-            "Batulicin": "IDKBU",
-            // Penambahan kode standar untuk yang belum ada di list (agar fitur tetap jalan)
-            "Donggala": "IDDGL", 
-            "Pontianak": "IDPNK",
-            "Selayar": "IDSLY"
+            "Surabaya": "IDSUB", "Banjarmasin": "IDBDJ", "Balikpapan": "IDBPN", "Kumai": "IDKUM",
+            "Sampit": "IDSMQ", "Makassar": "IDMAK", "Lembar": "IDLBR", "Labuan Bajo": "IDLBO",
+            "Maumere": "IDMOF", "Ende": "IDENE", "Kupang": "IDKOE", "Waingapu": "IDWGP",
+            "Semarang": "IDSRG", "Ketapang Kalbar": "IDKTG", "Parepare": "IDPAP",
+            "Baubau": "IDBAU", "Batulicin": "IDKBU", "Donggala": "IDDGL", 
+            "Pontianak": "IDPNK", "Selayar": "IDSLY"
         };
 
         const routeList = [
-            "Surabaya - Banjarmasin", "Banjarmasin - Surabaya",
-            "Surabaya - Balikpapan", "Balikpapan - Surabaya",
-            "Balikpapan - Donggala", "Donggala - Balikpapan",
-            "Surabaya - Kumai", "Kumai - Surabaya",
-            "Surabaya - Sampit", "Sampit - Surabaya",
-            "Surabaya - Makassar", "Makassar - Surabaya",
-            "Surabaya - Lembar", "Lembar - Surabaya",
-            "Surabaya - Labuan Bajo", "Labuan Bajo - Maumere",
-            "Maumere - Labuan Bajo", "Labuan Bajo - Surabaya",
-            "Labuan Bajo - Ende", "Ende - Kupang",
-            "Lembar - Waingapu", "Waingapu - Kupang",
-            "Semarang - Kumai", "Kumai - Semarang",
-            "Semarang - Sampit", "Sampit - Semarang",
-            "Semarang - Pontianak", "Pontianak - Semarang",
-            "Semarang - Ketapang Kalbar", "Ketapang Kalbar - Semarang",
-            "Parepare - Balikpapan", "Balikpapan - Parepare",
-            "Makassar - Baubau", "Baubau - Makassar",
-            "Makassar - Batulicin", "Batulicin - Makassar",
-            "Parepare - Batulicin", "Batulicin - Parepare",
-            "Makassar - Selayar", "Selayar - Baubau",
+            "Surabaya - Banjarmasin", "Banjarmasin - Surabaya", "Surabaya - Balikpapan", "Balikpapan - Surabaya",
+            "Balikpapan - Donggala", "Donggala - Balikpapan", "Surabaya - Kumai", "Kumai - Surabaya",
+            "Surabaya - Sampit", "Sampit - Surabaya", "Surabaya - Makassar", "Makassar - Surabaya",
+            "Surabaya - Lembar", "Lembar - Surabaya", "Surabaya - Labuan Bajo", "Labuan Bajo - Maumere",
+            "Maumere - Labuan Bajo", "Labuan Bajo - Surabaya", "Labuan Bajo - Ende", "Ende - Kupang",
+            "Lembar - Waingapu", "Waingapu - Kupang", "Semarang - Kumai", "Kumai - Semarang",
+            "Semarang - Sampit", "Sampit - Semarang", "Semarang - Pontianak", "Pontianak - Semarang",
+            "Semarang - Ketapang Kalbar", "Ketapang Kalbar - Semarang", "Parepare - Balikpapan", "Balikpapan - Parepare",
+            "Makassar - Baubau", "Baubau - Makassar", "Makassar - Batulicin", "Batulicin - Makassar",
+            "Parepare - Batulicin", "Batulicin - Parepare", "Makassar - Selayar", "Selayar - Baubau",
             "Baubau - Selayar", "Selayar - Makassar"
         ];
 
         let db = null;
-        let dbCache = {}; // Cache untuk menyimpan instance database
+        let conn = null;
         let allData = [];        
         let filteredData = [];   
         let dbColumns = [];      
         let currentPage = 1;
         let rowsPerPage = 10;
 
-        const config = {
-            locateFile: filename => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${filename}`
-        };
+        // --- INISIALISASI DUCKDB ---
+        async function initDuckDB() {
+            try {
+                // console.log("🚀 Memulai DuckDB...");
+                const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
+                const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
+                
+                const worker_url = URL.createObjectURL(
+                    new Blob([`importScripts("${bundle.mainWorker}");`], {type: 'text/javascript'})
+                );
 
-        window.addEventListener('DOMContentLoaded', () => {
-            // document.getElementById('db-source-name').textContent = currentDbUrl; // Dipindah ke autoLoadDatabase
-            initRouteOptions(); // Inisialisasi Dropdown
-            
-            // Event Listener Tahun
-            document.getElementById('yearSelect').addEventListener('change', (e) => {
-                const year = e.target.value;
-                currentDbUrl = `./Data ${year}.db`;
+                const worker = new Worker(worker_url);
+                const logger = new duckdb.ConsoleLogger();
+                db = new duckdb.AsyncDuckDB(logger, worker);
+                
+                await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+                conn = await db.connect();
+                
+                // console.log("✅ DuckDB Siap!");
                 autoLoadDatabase();
-            });
+            } catch (err) {
+                // console.error(err);
+                showError("Gagal Inisialisasi DuckDB: " + err.message);
+            }
+        }
 
+        // --- LOAD DATABASE (VERSI PEMBAHARUAN: FORCE MATERIALIZATION) ---
+        async function autoLoadDatabase() {
+            showLoading(true, `Mengunduh ${currentDbUrl}...`);
+            hideError();
+            
+            document.getElementById('table-wrapper').classList.add('hidden');
+            document.getElementById('controls').classList.add('hidden');
+            document.getElementById('empty-state').classList.add('hidden');
+            document.getElementById('db-source-name').textContent = currentDbUrl;
+
+            try {
+                if (!db || !conn) return;
+
+                // console.log(`📡 Fetching file: ${currentDbUrl}`);
+                
+                // 1. Download File
+                const response = await fetch(currentDbUrl);
+                if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+                const arrayBuffer = await response.arrayBuffer();
+                
+                // console.log("✅ Download Selesai. Bytes:", arrayBuffer.byteLength);
+
+                if (arrayBuffer.byteLength === 0) throw new Error("File kosong (0 bytes).");
+
+                showLoading(true, "Membangun Tabel Data...");
+
+                // 2. Register Buffer dengan nama yang AMAN (tanpa spasi/karakter aneh)
+                // Kita pakai nama fix 'temp_source.parquet' agar DuckDB tidak bingung dengan URL
+                await db.registerFileBuffer('temp_source.parquet', new Uint8Array(arrayBuffer));
+                
+                // 3. DEBUG: Cek apakah DuckDB mengenali skema/kolomnya
+                // console.log("🔍 Menganalisis Struktur Parquet...");
+                const schemaCheck = await conn.query(`DESCRIBE SELECT * FROM read_parquet('temp_source.parquet')`);
+                // console.table(schemaCheck.toArray().map(r => r.toJSON()));
+
+                // 4. STRATEGI BARU: Buat Tabel Internal (Materialize)
+                // Ini memaksa DuckDB membongkar parquet dan menyimpannya di memori sebagai tabel SQL biasa
+                // console.log("⚙️ Membuat Tabel Internal...");
+                await conn.query(`DROP TABLE IF EXISTS my_table`); 
+                await conn.query(`CREATE TABLE my_table AS SELECT * FROM read_parquet('temp_source.parquet')`);
+                
+                // 5. Query dari TABEL (bukan dari file)
+                // Kita juga cek jumlah baris dulu
+                const countResult = await conn.query(`SELECT count(*) as total FROM my_table`);
+                const totalRows = Number(countResult.toArray()[0].toJSON().total);
+                // console.log(`📊 Total Baris Terdeteksi: ${totalRows}`);
+
+                if (totalRows === 0) {
+                    throw new Error("Parquet terbaca tapi isinya 0 baris. Kemungkinan kesalahan saat export Python.");
+                }
+
+                // Ambil data
+                const result = await conn.query(`SELECT * FROM my_table`);
+                const arrowJson = result.toArray().map(r => r.toJSON());
+
+                if (arrowJson.length > 0) {
+                    dbColumns = Object.keys(arrowJson[0]);
+                    allData = arrowJson.map(row => {
+                        return dbColumns.map(col => {
+                            let val = row[col];
+                            // Handle BigInt aman
+                            if (typeof val === 'bigint') return val.toString();
+                            return val;
+                        });
+                    });
+                } else {
+                    dbColumns = [];
+                    allData = [];
+                }
+
+                performSearch(); 
+                document.getElementById('table-wrapper').classList.remove('hidden');
+                document.getElementById('controls').classList.remove('hidden');
+
+            } catch (err) {
+                // console.error("❌ ERROR:", err);
+                showError(`Gagal memuat data: <br>${err.message}`);
+                document.getElementById('empty-state').classList.remove('hidden');
+            } finally {
+                showLoading(false);
+                // Bersihkan memori file buffer jika perlu (opsional)
+                // await db.registerFileBuffer('temp_source.parquet', new Uint8Array([])); 
+            }
+        }
+        // --- Event Listeners & Helper Functions tetap sama seperti sebelumnya ---
+        // (Copy bagian bawah dari kode sebelumnya: Event Listeners, performSearch, dll)
+        
+        // --- Copy-Paste Helper Functions di sini ---
+        window.addEventListener('DOMContentLoaded', () => {
+            initRouteOptions();
+            initDuckDB();
+        });
+
+        document.getElementById('yearSelect').addEventListener('change', (e) => {
+            currentDbUrl = e.target.value;
             autoLoadDatabase();
         });
 
+        window.performSearch = performSearch;
+        window.resetSearch = resetSearch;
+        window.changePage = changePage;
+
         document.getElementById('searchBtn').addEventListener('click', performSearch);
         document.getElementById('resetBtn').addEventListener('click', resetSearch);
-        document.getElementById('routeSelect').addEventListener('change', performSearch); // Trigger search saat dropdown berubah
+        document.getElementById('routeSelect').addEventListener('change', performSearch);
         
         document.getElementById('rowsPerPage').addEventListener('change', (e) => {
             rowsPerPage = parseInt(e.target.value);
             currentPage = 1;
             renderCurrentPage();
         });
+        
         document.getElementById('btnPrev').addEventListener('click', () => changePage(-1));
         document.getElementById('btnNext').addEventListener('click', () => changePage(1));
-        
         document.getElementById('searchInput').addEventListener('keypress', function (e) {
             if (e.key === 'Enter') performSearch();
         });
@@ -252,13 +335,8 @@
                 if (parts.length === 2) {
                     const origin = parts[0];
                     const destination = parts[1];
-                    
-                    // Kita cari Kode Inaport untuk TUJUAN
                     const destCode = portCodes[destination];
-                    
                     if (destCode) {
-                        // Value format: "KODE_TUJUAN|NAMA_ASAL"
-                        // Contoh: "IDSUB|BANJARMASIN" (Untuk rute Banjarmasin - Surabaya)
                         const optionValue = `${destCode}|${origin}`;
                         const option = document.createElement('option');
                         option.value = optionValue;
@@ -267,130 +345,6 @@
                     }
                 }
             });
-        }
-
-        async function autoLoadDatabase() {
-            showLoading(true, `Mengunduh database ${currentDbUrl}...`);
-            hideError();
-            
-            // Reset UI: Sembunyikan data lama saat memuat ulang
-            document.getElementById('table-wrapper').classList.add('hidden');
-            document.getElementById('controls').classList.add('hidden');
-            document.getElementById('empty-state').classList.add('hidden');
-
-            document.getElementById('db-source-name').textContent = currentDbUrl;
-
-            try {
-                // Cek Cache
-                if (dbCache[currentDbUrl]) {
-                    console.log("Menggunakan database dari cache:", currentDbUrl);
-                    db = dbCache[currentDbUrl];
-                    loadTableData();
-                    return; // Finally akan tetap jalan untuk hide loading
-                }
-
-                const SQL = await initSqlJs(config);
-                const response = await fetch(currentDbUrl);
-                
-                if (!response.ok) {
-                    if(response.status === 404) throw new Error(`File '${currentDbUrl}' tidak ditemukan.`);
-                    throw new Error(`Gagal memuat database (${response.status}).`);
-                }
-
-                const buf = await response.arrayBuffer();
-                db = new SQL.Database(new Uint8Array(buf));
-                
-                // Simpan ke cache
-                dbCache[currentDbUrl] = db;
-                
-                showLoading(true, "Membaca tabel...");
-                loadTableData();
-
-            } catch (err) {
-                console.error(err);
-                showError(err.message);
-                document.getElementById('empty-state').classList.remove('hidden');
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        async function loadSampleData() {
-            showLoading(true, "Membuat Data Dummy...");
-            hideError();
-            
-            // Reset UI
-            document.getElementById('table-wrapper').classList.add('hidden');
-            document.getElementById('controls').classList.add('hidden');
-            document.getElementById('empty-state').classList.add('hidden');
-
-            document.getElementById('db-source-name').textContent = "Data Dummy (Memori)";
-            
-            try {
-                const SQL = await initSqlJs(config);
-                db = new SQL.Database();
-                
-                // Menambahkan kolom INAPORT CODE dan TIBA DARI untuk testing filter
-                const cols = ["NOMOR PKK", "KAPAL", "PERUSAHAAN", "STATUS", "BENDERA", "INAPORT CODE", "TIBA DARI", "DETAIL_BONGKAR_MUAT"];
-                db.run(`CREATE TABLE data_operasional (${cols.map(c => `"${c}" TEXT`).join(', ')});`);
-
-                const sampleJson = JSON.stringify({
-                    "BONGKAR": [{"KOMODITIBONGKAR": "BATUBARA", "JENISBONGKAR": "Curah", "TONBONGKAR": "5000", "UNITBONGKAR": "0"}], 
-                    "MUAT": [{"KOMODITIMUAT": "SEMEN", "JENISMUAT": "Bag", "TONMUAT": "1000", "UNITMUAT": "20000"}]
-                });
-
-                // Dummy data disesuaikan agar filter bisa dicoba
-                // Contoh 1: Banjarmasin - Surabaya (Tiba di IDSUB dari Banjarmasin)
-                db.run(`INSERT INTO data_operasional VALUES ('PKK-1', 'KM. TEST 01', 'PT. PELAYARAN A', 'SANDAR', 'INDONESIA', 'IDSUB', 'BANJARMASIN', '${sampleJson}')`);
-                
-                // Contoh 2: Surabaya - Banjarmasin (Tiba di IDBDJ dari Surabaya)
-                db.run(`INSERT INTO data_operasional VALUES ('PKK-2', 'KM. TEST 02', 'PT. PELAYARAN B', 'LABUH', 'INDONESIA', 'IDBDJ', 'SURABAYA', '${sampleJson}')`);
-
-                // Isi sisanya random
-                for(let i=3; i<=25; i++) {
-                    db.run(`INSERT INTO data_operasional VALUES 
-                    ('PKK-${i}', 'KM. AUTO LOAD ${i}', 'PT. CONTOH ${i}', '${i%2==0?"SANDAR":"LABUH"}', 'INDONESIA', 'IDSUB', 'JAKARTA', '${sampleJson}')`);
-                }
-
-                loadTableData();
-            } catch (e) {
-                showError("Gagal membuat data dummy: " + e.message);
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        function loadTableData() {
-            try {
-                let tableName = "data_operasional";
-                const tables = db.exec("SELECT name FROM sqlite_master WHERE type='table'");
-                
-                if (tables.length > 0 && tables[0].values.length > 0) {
-                   const foundTable = tables[0].values.flat().find(t => t === "data_operasional");
-                   if (!foundTable) tableName = tables[0].values[0][0];
-                } else {
-                    throw new Error("Database kosong.");
-                }
-
-                // Query dasar
-                const result = db.exec(`SELECT * FROM "${tableName}"`);
-                if (result.length === 0 || result[0].values.length === 0) throw new Error(`Tabel '${tableName}' kosong.`);
-
-                dbColumns = result[0].columns;
-                allData = result[0].values; 
-                
-                // Terapkan search jika ada input tersimpan, jika tidak reset
-                performSearch();
-                // Update header top counts (total and filtered updated by performSearch)
-                // Note: performSearch will update filtered count via updateTopRowCount()
-
-                document.getElementById('empty-state').classList.add('hidden');
-                document.getElementById('table-wrapper').classList.remove('hidden');
-                document.getElementById('controls').classList.remove('hidden');
-
-            } catch (err) {
-                showError("Error: " + err.message);
-            }
         }
 
         function renderHeader(columns) {
@@ -406,7 +360,7 @@
 
         function performSearch() {
             const textInput = document.getElementById('searchInput').value.toUpperCase();
-            const routeInput = document.getElementById('routeSelect').value; // Format: "CODE|ORIGIN"
+            const routeInput = document.getElementById('routeSelect').value;
             
             let routeDestCode = "";
             let routeOriginName = "";
@@ -417,48 +371,33 @@
                 routeOriginName = parts[1].toUpperCase();
             }
 
-            // Cari index kolom penting
             const idxInaport = dbColumns.indexOf("INAPORT CODE");
             const idxTibaDari = dbColumns.indexOf("TIBA DARI");
             
-            // Validasi jika kolom tidak ditemukan di database
             const isRouteFilterActive = routeInput && idxInaport !== -1 && idxTibaDari !== -1;
 
             filteredData = allData.filter(row => {
-                // 1. Filter Text (Global)
                 const matchesText = textInput === "" || row.some(cell => String(cell).toUpperCase().includes(textInput));
-                
-                // 2. Filter Rute (Spesifik)
                 let matchesRoute = true;
                 if (isRouteFilterActive) {
                     const cellCode = String(row[idxInaport] || "").toUpperCase();
                     const cellOrigin = String(row[idxTibaDari] || "").toUpperCase();
-                    
-                    // Logic: WHERE "INAPORT CODE" = ID... AND "TIBA DARI" LIKE %ASAL%
                     matchesRoute = (cellCode === routeDestCode) && (cellOrigin.includes(routeOriginName));
                 }
-
                 return matchesText && matchesRoute;
             });
 
-            if (routeInput && (idxInaport === -1 || idxTibaDari === -1)) {
-                console.warn("Kolom 'INAPORT CODE' atau 'TIBA DARI' tidak ditemukan di database. Filter rute diabaikan.");
-            }
-
             currentPage = 1;
-            renderHeader(dbColumns); // Render header ulang (opsional)
+            renderHeader(dbColumns);
             renderCurrentPage();
-
-            // Update header top counts with both total and filtered
             updateTopRowCount(allData.length || 0, filteredData.length || 0);
 
-            // Tampilkan empty state jika hasil filter 0
-            if (filteredData.length === 0) {
+            if (filteredData.length === 0 && allData.length > 0) {
                 document.getElementById('table-wrapper').classList.add('hidden');
                 document.getElementById('empty-state').classList.remove('hidden');
                 document.querySelector('#empty-state h3').innerText = "Data tidak ditemukan";
                 document.querySelector('#empty-state p').innerText = "Coba ubah kata kunci atau filter rute.";
-            } else {
+            } else if (allData.length > 0) {
                 document.getElementById('table-wrapper').classList.remove('hidden');
                 document.getElementById('empty-state').classList.add('hidden');
             }
@@ -492,10 +431,10 @@
                     const td = document.createElement('td');
                     td.className = "px-6 py-4 whitespace-nowrap border-b border-gray-100 text-gray-700 align-top";
                     
-                    if (dbColumns[i].toUpperCase() === "DETAIL_BONGKAR_MUAT") {
+                    if (dbColumns[i].toUpperCase().includes("DETAIL") || dbColumns[i].toUpperCase().includes("BONGKAR_MUAT")) {
                         td.innerHTML = formatDetailJSON(cell);
                     } else {
-                        td.textContent = cell !== null ? cell : '-';
+                        td.textContent = cell !== null && cell !== undefined ? cell : '-';
                     }
                     tr.appendChild(td);
                 });
@@ -557,22 +496,19 @@
                 html += '</div>';
                 return hasContent ? html : '<span class="text-gray-400 italic">-</span>';
             } catch (e) {
-                return `<span class="text-red-500 text-xs font-bold">⚠️ Invalid Format</span>`;
+                return `<span class="text-gray-500 text-xs">${String(jsonInput).substring(0, 50)}...</span>`;
             }
         }
 
-        function showLoading(isLoading, text = "Memproses database...") {
+        function showLoading(isLoading, text = "Memproses...") {
             const el = document.getElementById('status');
             document.getElementById('status-text').innerText = text;
             if (isLoading) el.classList.remove('hidden');
             else el.classList.add('hidden');
         }
 
-        // Update the header box that shows jumlah data (filtered / total)
         function updateTopRowCount(totalCount, filteredCount) {
-            const totalEl = document.getElementById('db-total-count');
             const filteredEl = document.getElementById('db-filtered-count');
-            if (totalEl) totalEl.innerText = totalCount || 0;
             if (filteredEl) filteredEl.innerText = filteredCount || 0;
         }
 
@@ -580,7 +516,6 @@
             const el = document.getElementById('error');
             el.innerHTML = `<strong>Error:</strong> ${msg}`;
             el.classList.remove('hidden');
-            // Reset header counts if there's an error or no data
             updateTopRowCount(0, 0);
         }
         
