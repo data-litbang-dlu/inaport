@@ -51,11 +51,6 @@
                         <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
                     </div>
                 </div>
-
-                <div class="px-4 py-2 bg-gray-50 rounded-lg border border-gray-200 flex items-center gap-2">
-                    <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                    <span class="text-xs font-medium text-gray-600">DB Transaksi: <span id="db-source-name" class="font-bold">...</span></span>
-                </div>
             </div>
         </div>
 
@@ -175,16 +170,16 @@
                             </p>
                         </div>
                         <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 text-center hover:bg-slate-100 transition-colors">
-                            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wide">Trailer</p>
+                            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wide">Alat Berat</p>
                             <p class="text-lg font-bold text-slate-800 mt-1">
-                                <span id="stat-trailer">-</span>
+                                <span id="stat-alat-berat">-</span>
                                 <span class="text-xs text-gray-500 ml-[0.1]">Unit</span>
                             </p>
                         </div>
                         <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 text-center hover:bg-slate-100 transition-colors">
-                            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wide">Alat Berat</p>
+                            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wide">Trailer</p>
                             <p class="text-lg font-bold text-slate-800 mt-1">
-                                <span id="stat-alat-berat">-</span>
+                                <span id="stat-trailer">-</span>
                                 <span class="text-xs text-gray-500 ml-[0.1]">Unit</span>
                             </p>
                         </div>
@@ -320,7 +315,6 @@
             document.getElementById('controls').classList.add('hidden');
             document.getElementById('summary-stats').classList.add('hidden'); 
             document.getElementById('empty-state').classList.add('hidden');
-            document.getElementById('db-source-name').textContent = currentDbUrl;
 
             try {
                 if (!db || !conn) return;
