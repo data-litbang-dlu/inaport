@@ -133,57 +133,174 @@
                             </p>
                         </div>
 
-                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
-                        <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 text-center hover:bg-slate-100 transition-colors">
-                            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wide">Sepeda Motor</p>
-                            <p class="text-lg font-bold text-slate-800 mt-1">
-                                <span id="stat-motor">-</span>
-                                <span class="text-xs text-gray-500 ml-[0.1]">Unit</span>
-                            </p>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
+                            
+                            <!-- Sepeda Motor -->
+                            <div class="group relative bg-white p-3 rounded-xl border border-slate-200 overflow-hidden hover:border-blue-300 hover:shadow-md transition-all duration-300 hover:-translate-y-1">
+                                <!-- Background Icon (Overflow) -->
+                                <div class="absolute -right-2 -bottom-4 text-slate-300 group-hover:text-blue-500 transition-colors duration-300">
+                                    <svg class="w-20 h-20 transform -rotate-12" fill="currentColor" viewBox="0 0 24 24">
+                                        <!-- Motorcycle icon -->
+                                        <circle cx="5" cy="17" r="3"/>
+                                        <circle cx="19" cy="17" r="3"/>
+                                        <path d="M19 14h-1l-2-4h-4l-1 2H8l-1-2H5v2l2 1.5L8 17h7l1-1h2"/>
+                                        <path d="M10 8h4l1 2h-6z"/>
+                                        <path d="M13 5h2v3h-2z"/>
+                                        <circle cx="5" cy="17" r="1.5" fill="white"/>
+                                        <circle cx="19" cy="17" r="1.5" fill="white"/>
+                                    </svg>
+                                </div>
+                                
+                                <!-- Content -->
+                                <div class="relative z-10">
+                                    <p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Sepeda Motor</p>
+                                    <p class="text-2xl font-extrabold text-slate-800 mt-1 flex items-baseline gap-1">
+                                        <span id="stat-motor">-</span>
+                                        <span class="text-[10px] font-medium text-slate-400">Unit</span>
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Mobil -->
+                            <div class="group relative bg-white p-3 rounded-xl border border-slate-200 overflow-hidden hover:border-blue-300 hover:shadow-md transition-all duration-300 hover:-translate-y-1">
+                                <div class="absolute -right-2 -bottom-4 text-slate-300 group-hover:text-blue-500 transition-colors duration-300">
+                                    <svg class="w-20 h-20 transform -rotate-12" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5H6.5C5.84 5 5.28 5.42 5.08 6.01L3 12V20C3 20.55 3.45 21 4 21H5C5.55 21 6 20.55 6 20V19H18V20C18 20.55 18.45 21 19 21H20C20.55 21 21 20.55 21 20V12L18.92 6.01ZM6.5 16C5.67 16 5 15.33 5 14.5C5 13.67 5.67 13 6.5 13C7.33 13 8 13.67 8 14.5C8 15.33 7.33 16 6.5 16ZM17.5 16C16.67 16 16 15.33 16 14.5C16 13.67 16.67 13 17.5 13C18.33 13 19 13.67 19 14.5C19 15.33 18.33 16 17.5 16ZM5 11L6.5 6.5H17.5L19 11H5Z" />
+                                    </svg>
+                                </div>
+                                <div class="relative z-10">
+                                    <p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Mobil</p>
+                                    <p class="text-2xl font-extrabold text-slate-800 mt-1 flex items-baseline gap-1">
+                                        <span id="stat-mobil">-</span>
+                                        <span class="text-[10px] font-medium text-slate-400">Unit</span>
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Truk Sedang -->
+                            <div class="group relative bg-white p-3 rounded-xl border border-slate-200 overflow-hidden hover:border-blue-300 hover:shadow-md transition-all duration-300 hover:-translate-y-1">
+                                <div class="absolute -right-2 -bottom-4 text-slate-300 group-hover:text-blue-500 transition-colors duration-300">
+                                    <svg class="w-20 h-20 transform -rotate-12" fill="currentColor" viewBox="0 0 24 24">
+                                        <!-- Small/Medium Truck icon -->
+                                        <path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4z"/>
+                                        <path d="M17 9.5V12h4.47L19.5 9.5H17z" fill="white"/>
+                                        <circle cx="6" cy="17" r="2"/>
+                                        <circle cx="18" cy="17" r="2"/>
+                                        <circle cx="6" cy="17" r="1" fill="white"/>
+                                        <circle cx="18" cy="17" r="1" fill="white"/>
+                                    </svg>
+                                </div>
+                                <div class="relative z-10">
+                                    <p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Truk Sedang</p>
+                                    <p class="text-2xl font-extrabold text-slate-800 mt-1 flex items-baseline gap-1">
+                                        <span id="stat-truk-sedang">-</span>
+                                        <span class="text-[10px] font-medium text-slate-400">Unit</span>
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Truk Besar -->
+                            <div class="group relative bg-white p-3 rounded-xl border border-slate-200 overflow-hidden hover:border-blue-300 hover:shadow-md transition-all duration-300 hover:-translate-y-1">
+                                <div class="absolute -right-2 -bottom-4 text-slate-300 group-hover:text-blue-500 transition-colors duration-300">
+                                    <svg class="w-20 h-20 transform -rotate-12" fill="currentColor" viewBox="0 0 24 24">
+                                        <!-- Large Truck / Box Truck icon -->
+                                        <rect x="0" y="5" width="16" height="10" rx="1"/>
+                                        <path d="M16 9h4l2 4v4h-6V9z"/>
+                                        <circle cx="5" cy="17" r="2"/>
+                                        <circle cx="19" cy="17" r="2"/>
+                                        <circle cx="5" cy="17" r="1" fill="white"/>
+                                        <circle cx="19" cy="17" r="1" fill="white"/>
+                                        <rect x="17" y="10" width="3" height="3" fill="white" rx="0.5"/>
+                                    </svg>
+                                </div>
+                                <div class="relative z-10">
+                                    <p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Truk Besar</p>
+                                    <p class="text-2xl font-extrabold text-slate-800 mt-1 flex items-baseline gap-1">
+                                        <span id="stat-truk-besar">-</span>
+                                        <span class="text-[10px] font-medium text-slate-400">Unit</span>
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Tronton -->
+                            <div class="group relative bg-white p-3 rounded-xl border border-slate-200 overflow-hidden hover:border-blue-300 hover:shadow-md transition-all duration-300 hover:-translate-y-1">
+                                <div class="absolute -right-2 -bottom-4 text-slate-300 group-hover:text-blue-500 transition-colors duration-300">
+                                    <svg class="w-20 h-20 transform -rotate-12" fill="currentColor" viewBox="0 0 24 24">
+                                        <!-- Tronton / Heavy Truck (6 wheels) icon -->
+                                        <rect x="1" y="4" width="14" height="9" rx="1"/>
+                                        <path d="M15 7h5l2 4v5h-7V7z"/>
+                                        <circle cx="4" cy="16" r="2"/>
+                                        <circle cx="9" cy="16" r="2"/>
+                                        <circle cx="19" cy="16" r="2"/>
+                                        <circle cx="4" cy="16" r="1" fill="white"/>
+                                        <circle cx="9" cy="16" r="1" fill="white"/>
+                                        <circle cx="19" cy="16" r="1" fill="white"/>
+                                        <rect x="16" y="8" width="4" height="3" fill="white" rx="0.5"/>
+                                        <path d="M6 16h1M11 16h1" stroke="currentColor" stroke-width="0.5"/>
+                                    </svg>
+                                </div>
+                                <div class="relative z-10">
+                                    <p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Tronton</p>
+                                    <p class="text-2xl font-extrabold text-slate-800 mt-1 flex items-baseline gap-1">
+                                        <span id="stat-tronton">-</span>
+                                        <span class="text-[10px] font-medium text-slate-400">Unit</span>
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Alat Berat -->
+                            <div class="group relative bg-white p-3 rounded-xl border border-slate-200 overflow-hidden hover:border-blue-300 hover:shadow-md transition-all duration-300 hover:-translate-y-1">
+                                <div class="absolute right-2 -bottom-3 text-slate-300 group-hover:text-blue-500 transition-colors duration-300">
+                                    <svg class="w-20 h-20 transform -rotate-12" fill="currentColor" viewBox="0 0 24 24">
+                                        <!-- Pipa Knalpot -->
+                                        <rect x="5" y="2" width="2" height="4"/>
+                                        <!-- Body Cabin (dengan lubang jendela) -->
+                                        <path d="M3 6h9v8H3V6zm2 2v4h5V8H5z" fill-rule="evenodd"/>
+                                        <!-- Roda Rantai / Tracks (dengan lubang roda) -->
+                                        <path d="M1 14h14v5H1v-5zm2 1h2v3H3v-3zm4 0h2v3H7v-3zm4 0h2v3h-2v-3z" fill-rule="evenodd"/>
+                                        <!-- Lengan Hydraulik -->
+                                        <rect x="13" y="15" width="5" height="2"/>
+                                        <!-- Pisau Depan (Blade) -->
+                                        <path d="M19 10h1.5c1.4 0 2.5 1.1 2.5 2.5V19h-4v-9z"/>
+                                    </svg>
+                                </div>
+                                <div class="relative z-10">
+                                    <p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Alat Berat</p>
+                                    <p class="text-2xl font-extrabold text-slate-800 mt-1 flex items-baseline gap-1">
+                                        <span id="stat-alat-berat">-</span>
+                                        <span class="text-[10px] font-medium text-slate-400">Unit</span>
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Trailer -->
+                            <div class="group relative bg-white p-3 rounded-xl border border-slate-200 overflow-hidden hover:border-blue-300 hover:shadow-md transition-all duration-300 hover:-translate-y-1">
+                                <div class="absolute -right-2 -bottom-4 text-slate-300 group-hover:text-blue-500 transition-colors duration-300">
+                                    <svg class="w-20 h-20 transform -rotate-12" fill="currentColor" viewBox="0 0 24 24">
+                                        <!-- Trailer / Semi-truck icon -->
+                                        <rect x="0" y="5" width="15" height="9" rx="1"/>
+                                        <path d="M16 8h4l2 4v4h-6V8z"/>
+                                        <circle cx="3" cy="17" r="2"/>
+                                        <circle cx="7" cy="17" r="2"/>
+                                        <circle cx="14" cy="17" r="2"/>
+                                        <circle cx="18" cy="17" r="2"/>
+                                        <circle cx="3" cy="17" r="1" fill="white"/>
+                                        <circle cx="7" cy="17" r="1" fill="white"/>
+                                        <circle cx="14" cy="17" r="1" fill="white"/>
+                                        <circle cx="18" cy="17" r="1" fill="white"/>
+                                        <rect x="17" y="9" width="3" height="3" fill="white" rx="0.5"/>
+                                        <line x1="15" y1="14" x2="15" y2="10" stroke="white" stroke-width="0.5"/>
+                                    </svg>
+                                </div>
+                                <div class="relative z-10">
+                                    <p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Trailer</p>
+                                    <p class="text-2xl font-extrabold text-slate-800 mt-1 flex items-baseline gap-1">
+                                        <span id="stat-trailer">-</span>
+                                        <span class="text-[10px] font-medium text-slate-400">Unit</span>
+                                    </p>
+                                </div>
+                            </div>
                         </div>
-                        <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 text-center hover:bg-slate-100 transition-colors">
-                            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wide">Mobil</p>
-                            <p class="text-lg font-bold text-slate-800 mt-1">
-                                <span id="stat-mobil">-</span>
-                                <span class="text-xs text-gray-500 ml-[0.1]">Unit</span>
-                            </p>
-                        </div>
-                        <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 text-center hover:bg-slate-100 transition-colors">
-                            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wide">Truk Sedang</p>
-                            <p class="text-lg font-bold text-slate-800 mt-1">
-                                <span id="stat-truk-sedang">-</span>
-                                <span class="text-xs text-gray-500 ml-[0.1]">Unit</span>
-                            </p>
-                        </div>
-                        <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 text-center hover:bg-slate-100 transition-colors">
-                            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wide">Truk Besar</p>
-                            <p class="text-lg font-bold text-slate-800 mt-1">
-                                <span id="stat-truk-besar">-</span>
-                                <span class="text-xs text-gray-500 ml-[0.1]">Unit</span>
-                            </p>
-                        </div>
-                        <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 text-center hover:bg-slate-100 transition-colors">
-                            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wide">Tronton</p>
-                            <p class="text-lg font-bold text-slate-800 mt-1">
-                                <span id="stat-tronton">-</span>
-                                <span class="text-xs text-gray-500 ml-[0.1]">Unit</span>
-                            </p>
-                        </div>
-                        <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 text-center hover:bg-slate-100 transition-colors">
-                            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wide">Alat Berat</p>
-                            <p class="text-lg font-bold text-slate-800 mt-1">
-                                <span id="stat-alat-berat">-</span>
-                                <span class="text-xs text-gray-500 ml-[0.1]">Unit</span>
-                            </p>
-                        </div>
-                        <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 text-center hover:bg-slate-100 transition-colors">
-                            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wide">Trailer</p>
-                            <p class="text-lg font-bold text-slate-800 mt-1">
-                                <span id="stat-trailer">-</span>
-                                <span class="text-xs text-gray-500 ml-[0.1]">Unit</span>
-                            </p>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
