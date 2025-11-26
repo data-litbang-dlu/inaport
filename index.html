@@ -3,29 +3,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Data Inaport</title>
+    <title>Data Inaport & Statistik</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        /* Custom Scrollbar */
         .table-container::-webkit-scrollbar { height: 12px; width: 12px; }
         .table-container::-webkit-scrollbar-track { background: #f1f1f1; }
         .table-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 6px; }
         .table-container::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        /* Sub-table styling */
         .sub-table th, .sub-table td { font-size: 0.75rem; padding: 4px 8px; border: 1px solid #e2e8f0; }
         .sub-table th { background-color: #f8fafc; font-weight: 600; color: #475569; }
+        
+        /* Animations */
+        .animate-fade-in { animation: fadeIn 0.5s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans">
 
     <div class="container mx-auto px-4 py-8 max-w-[95%]">
         
+        <!-- HEADER SECTION -->
         <div class="mb-8 flex flex-col md:flex-row justify-between items-center bg-white p-6 rounded-xl shadow-sm border border-gray-100">
             <div>
-                <h1 class="text-2xl font-bold text-blue-800">Data Inaport 2019-2024</h1>
-                <p class="text-sm text-gray-500 mt-1">19 Pelabuhan</p>
+                <h1 class="text-2xl font-bold text-blue-800">Data Inaport Dashboard</h1>
+                <p class="text-sm text-gray-500 mt-1">19 Pelabuhan & Statistik Terintegrasi</p>
             </div>
             
             <div class="mt-4 md:mt-0 flex flex-col sm:flex-row gap-4 items-center">
-                <!-- Year Selector -->
                 <div class="relative group">
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <svg class="h-4 w-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -39,8 +46,6 @@
                         <option value="Data 2021.parquet">Data Tahun 2021</option>
                         <option value="Data 2020.parquet">Data Tahun 2020</option>
                         <option value="Data 2019.parquet">Data Tahun 2019</option>
-                        <!-- DEBUG ONLY -->
-                        <!-- <option value="Data 2019-2024.parquet">Semua Data (2019-2024)</option> -->
                     </select>
                     <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-blue-600">
                         <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
@@ -49,16 +54,12 @@
 
                 <div class="px-4 py-2 bg-gray-50 rounded-lg border border-gray-200 flex items-center gap-2">
                     <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                    <span class="text-xs font-medium text-gray-600">Sumber: <span id="db-source-name" class="font-bold">...</span></span>
-                </div>
-
-                <div id="header-count" class="px-4 py-2 bg-gray-50 rounded-lg border border-gray-200 flex items-center gap-2">
-                    <span class="text-xs font-medium text-gray-600">Jumlah data: <span id="db-filtered-count" class="font-bold">0</span>
-                    </span>
+                    <span class="text-xs font-medium text-gray-600">DB Transaksi: <span id="db-source-name" class="font-bold">...</span></span>
                 </div>
             </div>
         </div>
 
+        <!-- STATUS & ERROR -->
         <div id="status" class="hidden mb-4 p-4 bg-blue-50 text-blue-700 rounded-lg border border-blue-100 animate-pulse flex items-center gap-2">
             <svg class="animate-spin h-5 w-5 text-blue-700" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -69,16 +70,16 @@
 
         <div id="error" class="hidden mb-4 p-4 bg-red-50 text-red-700 rounded-lg border border-red-100 font-medium text-sm"></div>
 
+        <!-- CONTROLS -->
         <div id="controls" class="hidden mb-6 flex flex-col gap-4">
             <div class="flex flex-col md:flex-row gap-2 justify-between w-full">
-                
                 <div class="flex flex-col md:flex-row gap-2 flex-grow">
                     <input type="text" id="searchInput" placeholder="Cari Nama Kapal / Perusahaan..." 
                         class="flex-grow md:flex-grow-0 md:w-1/4 p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm">
                     
                     <select id="routeSelect" class="flex-grow md:flex-grow-0 md:w-1/4 p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm bg-white">
-                        <option value="">-- Pilih Rute (Semua) --</option>
-                        </select>
+                        <option value="">Semua Lintasan</option>
+                    </select>
                     
                     <button id="searchBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg transition-colors shadow-sm flex items-center justify-center gap-2">
                         Terapkan
@@ -102,32 +103,118 @@
             </div>
         </div>
 
-        <div id="table-wrapper" class="hidden bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
+        <!-- SUMMARY STATISTICS -->
+        <div id="summary-stats" class="hidden mb-6 animate-fade-in">
+            <div class="bg-white rounded-xl shadow-sm border border-blue-200 overflow-hidden">
+                <div class="bg-blue-50 px-6 py-3 border-b border-blue-100 flex justify-between items-center max-md:flex-col">
+                    <h3 class="font-bold text-blue-900 flex items-center">
+                        <svg class="w-5 h-5 mx-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                        Statistik Lintasan <span id="stats-year-display" class="ml-1">...</span>
+                    </h3>
+                    <div class="flex gap-2 max-md:flex-col">
+                        <span id="summary-route-name" class="text-xs font-bold text-blue-700 bg-blue-100 px-3 py-1.5 rounded-full border border-blue-200"></span>
+                        <div id="header-count" class="text-xs font-bold text-blue-700 bg-blue-100 px-3 py-1.5 rounded-full border border-blue-200">
+                            <span class="text-xs font-bold">Jumlah data: <span id="db-filtered-count" class="font-bold">0</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="p-6">
+                    <div class="grid grid-cols-1 gap-4 mb-4">
+                        <div class="bg-green-50 p-4 rounded-lg border border-green-200 flex flex-col sm:flex-row justify-between items-center gap-2">
+                            <div class="flex items-center gap-3">
+                                <div class="p-2 bg-green-100 rounded-full text-green-600">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3"></path></svg>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-green-800 font-bold uppercase">Tonase Komoditi</p>
+                                    <p class="text-xs text-green-600">Total Komoditi Bongkar Selain Kendaraan</p>
+                                </div>
+                            </div>
+                            <p class="text-2xl font-bold text-green-800 flex items-baseline gap-1">
+                                <span id="stat-ton-bongkar">-</span>
+                                <span class="text-sm font-medium text-green-600">TON</span>
+                            </p>
+                        </div>
+
+                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
+                        <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 text-center hover:bg-slate-100 transition-colors">
+                            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wide">Sepeda Motor</p>
+                            <p class="text-lg font-bold text-slate-800 mt-1">
+                                <span id="stat-motor">-</span>
+                                <span class="text-xs text-gray-500 ml-[0.1]">Unit</span>
+                            </p>
+                        </div>
+                        <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 text-center hover:bg-slate-100 transition-colors">
+                            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wide">Mobil</p>
+                            <p class="text-lg font-bold text-slate-800 mt-1">
+                                <span id="stat-mobil">-</span>
+                                <span class="text-xs text-gray-500 ml-[0.1]">Unit</span>
+                            </p>
+                        </div>
+                        <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 text-center hover:bg-slate-100 transition-colors">
+                            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wide">Truk Sedang</p>
+                            <p class="text-lg font-bold text-slate-800 mt-1">
+                                <span id="stat-truk-sedang">-</span>
+                                <span class="text-xs text-gray-500 ml-[0.1]">Unit</span>
+                            </p>
+                        </div>
+                        <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 text-center hover:bg-slate-100 transition-colors">
+                            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wide">Truk Besar</p>
+                            <p class="text-lg font-bold text-slate-800 mt-1">
+                                <span id="stat-truk-besar">-</span>
+                                <span class="text-xs text-gray-500 ml-[0.1]">Unit</span>
+                            </p>
+                        </div>
+                        <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 text-center hover:bg-slate-100 transition-colors">
+                            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wide">Tronton</p>
+                            <p class="text-lg font-bold text-slate-800 mt-1">
+                                <span id="stat-tronton">-</span>
+                                <span class="text-xs text-gray-500 ml-[0.1]">Unit</span>
+                            </p>
+                        </div>
+                        <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 text-center hover:bg-slate-100 transition-colors">
+                            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wide">Trailer</p>
+                            <p class="text-lg font-bold text-slate-800 mt-1">
+                                <span id="stat-trailer">-</span>
+                                <span class="text-xs text-gray-500 ml-[0.1]">Unit</span>
+                            </p>
+                        </div>
+                        <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 text-center hover:bg-slate-100 transition-colors">
+                            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wide">Alat Berat</p>
+                            <p class="text-lg font-bold text-slate-800 mt-1">
+                                <span id="stat-alat-berat">-</span>
+                                <span class="text-xs text-gray-500 ml-[0.1]">Unit</span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        </div>
+
+        <!-- DATA TABLE -->
+        <div id="table-wrapper" class="hidden bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col mt-6">
             <div class="table-container overflow-x-auto min-h-[300px]">
                 <table class="w-full text-left border-collapse">
                     <thead class="bg-slate-800 text-white sticky top-0 z-10 shadow-sm">
-                        <tr id="table-headers" class="text-xs uppercase tracking-wider whitespace-nowrap">
-                            </tr>
+                        <tr id="table-headers" class="text-xs uppercase tracking-wider whitespace-nowrap"></tr>
                     </thead>
-                    <tbody id="table-body" class="text-sm divide-y divide-gray-200">
-                        </tbody>
+                    <tbody id="table-body" class="text-sm divide-y divide-gray-200"></tbody>
                 </table>
             </div>
             
             <div id="pagination-controls" class="p-4 bg-gray-50 border-t border-gray-200 flex flex-col md:flex-row justify-between items-center gap-4">
                 <div class="text-sm text-gray-600">
-                    Menampilkan <span id="start-row" class="font-bold">0</span> - <span id="end-row" class="font-bold">0</span> dari <span id="total-rows" class="font-bold">0</span> data
+                    Menampilkan <span id="start-row" class="font-bold">0</span> - <span id="end-row" class="font-bold">0</span> dari <span id="db-filtered-count-bottom" class="font-bold">0</span> data
                 </div>
                 
                 <div class="flex items-center gap-2">
                     <button id="btnPrev" class="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                         &larr; Sebelumnya
                     </button>
-                    
-                    <span id="page-indicator" class="text-sm font-medium text-gray-700 px-2">
-                        Halaman 1
-                    </span>
-                    
+                    <span id="page-indicator" class="text-sm font-medium text-gray-700 px-2">Halaman 1</span>
                     <button id="btnNext" class="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                         Selanjutnya &rarr;
                     </button>
@@ -144,7 +231,6 @@
             <h3 class="text-lg font-medium text-gray-900">Tidak ada data</h3>
             <p class="text-gray-500 mt-1">Gagal memuat database atau hasil pencarian kosong.</p>
         </div>
-
     </div>
 
     <script type="module">
@@ -152,15 +238,15 @@
 
         // --- KONFIGURASI FILE ---
         let currentDbUrl = 'Data 2024.parquet'; 
+        const statsDbUrl = 'statistik.parquet';
         
-        // --- KONFIGURASI RUTE ---
         const portCodes = {
             "Surabaya": "IDSUB", "Banjarmasin": "IDBDJ", "Balikpapan": "IDBPN", "Kumai": "IDKUM",
             "Sampit": "IDSMQ", "Makassar": "IDMAK", "Lembar": "IDLBR", "Labuan Bajo": "IDLBO",
             "Maumere": "IDMOF", "Ende": "IDENE", "Kupang": "IDKOE", "Waingapu": "IDWGP",
             "Semarang": "IDSRG", "Ketapang Kalbar": "IDKTG", "Parepare": "IDPAP",
             "Baubau": "IDBAU", "Batulicin": "IDKBU", "Donggala": "IDDGL", 
-            "Pontianak": "IDPNK", "Selayar": "IDSLY"
+            "Pontianak": "IDPNK", "Selayar": "IDSLR"
         };
 
         const routeList = [
@@ -182,15 +268,15 @@
         let allData = [];        
         let filteredData = [];   
         let dbColumns = [];      
+        let isStatsLoaded = false;
+        
         let currentPage = 1;
         let rowsPerPage = 10;
 
-        // --- INISIALISASI DUCKDB ---
         async function initDuckDB() {
             try {
                 const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
                 const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
-                
                 const worker_url = URL.createObjectURL(
                     new Blob([`importScripts("${bundle.mainWorker}");`], {type: 'text/javascript'})
                 );
@@ -202,19 +288,37 @@
                 await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
                 conn = await db.connect();
                 
-                autoLoadDatabase();
+                await loadStatisticsDb();
+                await autoLoadDatabase();
+                
             } catch (err) {
                 showError("Gagal Inisialisasi DuckDB: " + err.message);
             }
         }
 
-        // --- LOAD DATABASE ---
+        async function loadStatisticsDb() {
+            try {
+                const response = await fetch(statsDbUrl);
+                if (!response.ok) throw new Error("File statistik.parquet tidak ditemukan");
+                
+                const arrayBuffer = await response.arrayBuffer();
+                await db.registerFileBuffer('temp_stats.parquet', new Uint8Array(arrayBuffer));
+                await conn.query(`DROP TABLE IF EXISTS stats_table`);
+                await conn.query(`CREATE TABLE stats_table AS SELECT * FROM read_parquet('temp_stats.parquet')`);
+                
+                isStatsLoaded = true;
+            } catch (e) {
+                console.warn("Gagal load statistik:", e);
+            }
+        }
+
         async function autoLoadDatabase() {
             showLoading(true, `Mengunduh ${currentDbUrl}...`);
             hideError();
             
             document.getElementById('table-wrapper').classList.add('hidden');
             document.getElementById('controls').classList.add('hidden');
+            document.getElementById('summary-stats').classList.add('hidden'); 
             document.getElementById('empty-state').classList.add('hidden');
             document.getElementById('db-source-name').textContent = currentDbUrl;
 
@@ -230,17 +334,9 @@
                 showLoading(true, "Membangun Tabel Data...");
 
                 await db.registerFileBuffer('temp_source.parquet', new Uint8Array(arrayBuffer));
-                
                 await conn.query(`DROP TABLE IF EXISTS my_table`); 
                 await conn.query(`CREATE TABLE my_table AS SELECT * FROM read_parquet('temp_source.parquet')`);
                 
-                const countResult = await conn.query(`SELECT count(*) as total FROM my_table`);
-                const totalRows = Number(countResult.toArray()[0].toJSON().total);
-
-                if (totalRows === 0) {
-                    throw new Error("Parquet terbaca tapi isinya 0 baris.");
-                }
-
                 const result = await conn.query(`SELECT * FROM my_table`);
                 const arrowJson = result.toArray().map(r => r.toJSON());
 
@@ -258,9 +354,8 @@
                     allData = [];
                 }
 
-                performSearch(); 
-                document.getElementById('table-wrapper').classList.remove('hidden');
                 document.getElementById('controls').classList.remove('hidden');
+                performSearch(); 
 
             } catch (err) {
                 showError(`Gagal memuat data: <br>${err.message}`);
@@ -270,7 +365,6 @@
             }
         }
 
-        // --- SETUP EVENT LISTENERS ---
         window.addEventListener('DOMContentLoaded', () => {
             initRouteOptions();
             initDuckDB();
@@ -281,29 +375,20 @@
             autoLoadDatabase();
         });
 
-        // Make functions globally available for inline onclick attributes if needed
-        window.performSearch = performSearch;
-        window.resetSearch = resetSearch;
-        window.changePage = changePage;
-
         document.getElementById('searchBtn').addEventListener('click', performSearch);
         document.getElementById('resetBtn').addEventListener('click', resetSearch);
         document.getElementById('routeSelect').addEventListener('change', performSearch);
-        
         document.getElementById('rowsPerPage').addEventListener('change', (e) => {
             rowsPerPage = parseInt(e.target.value);
             currentPage = 1;
             renderCurrentPage();
         });
-        
         document.getElementById('btnPrev').addEventListener('click', () => changePage(-1));
         document.getElementById('btnNext').addEventListener('click', () => changePage(1));
-        document.getElementById('searchInput').addEventListener('keypress', function (e) {
+        document.getElementById('searchInput').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') performSearch();
         });
 
-        // --- REVISI: INIT ROUTE OPTIONS ---
-        // Sekarang menyimpan KODE|KODE (Contoh: IDSUB|IDBDJ)
         function initRouteOptions() {
             const select = document.getElementById('routeSelect');
             routeList.forEach(route => {
@@ -311,13 +396,9 @@
                 if (parts.length === 2) {
                     const origin = parts[0];
                     const destination = parts[1];
-                    
-                    const originCode = portCodes[origin];      // Ambil kode asal
-                    const destCode = portCodes[destination];   // Ambil kode tujuan
-
-                    // Pastikan kedua kode ada dalam daftar portCodes
+                    const originCode = portCodes[origin];
+                    const destCode = portCodes[destination];
                     if (destCode && originCode) {
-                        // Value format: TUJUAN_CODE|ASAL_CODE
                         const optionValue = `${destCode}|${originCode}`;
                         const option = document.createElement('option');
                         option.value = optionValue;
@@ -339,56 +420,134 @@
             });
         }
 
-        // --- REVISI: PERFORM SEARCH ---
-        // Sekarang menggunakan "TIBA DARI CODE"
         function performSearch() {
             const textInput = document.getElementById('searchInput').value.toUpperCase();
             const routeInput = document.getElementById('routeSelect').value;
             
-            let routeDestCode = "";
-            let routeOriginCode = "";
+            // --- 1. VISIBILITY SETTING ---
+            const summaryDiv = document.getElementById('summary-stats');
+            const tableWrapper = document.getElementById('table-wrapper');
+            const emptyState = document.getElementById('empty-state');
 
-            if (routeInput) {
-                const parts = routeInput.split('|');
-                routeDestCode = parts[0]; // Kode Tujuan (INAPORT CODE)
-                routeOriginCode = parts[1]; // Kode Asal (TIBA DARI CODE)
+            // Jika "Semua Lintasan" (routeInput kosong), sembunyikan statistik
+            if (!routeInput || routeInput === "") {
+                summaryDiv.classList.add('hidden');
+            } else {
+                summaryDiv.classList.remove('hidden');
+                // Setup Teks Header Statistik
+                const selectElement = document.getElementById('routeSelect');
+                const selectedText = selectElement.options[selectElement.selectedIndex].text;
+                document.getElementById('summary-route-name').textContent = selectedText;
+                
+                const yearMatch = currentDbUrl.match(/(\d{4})/);
+                const selectedYear = yearMatch ? yearMatch[0] : "";
+                document.getElementById('stats-year-display').textContent = selectedYear;
             }
 
-            const idxInaport = dbColumns.indexOf("INAPORT CODE");
-            
-            // --- PERUBAHAN DISINI: Menggunakan "TIBA DARI CODE" ---
-            const idxTibaDari = dbColumns.indexOf("TIBA DARI CODE"); 
-            
-            // Pastikan kolom ditemukan
-            const isRouteFilterActive = routeInput && idxInaport !== -1 && idxTibaDari !== -1;
+            // --- 2. FILTERING LOGIC ---
+            let routeDestCode = "";
+            let routeOriginCode = "";
+            let isRouteFilterActive = false;
 
+            if (routeInput && routeInput !== "") {
+                const parts = routeInput.split('|');
+                if(parts.length === 2) {
+                    routeDestCode = parts[0]; 
+                    routeOriginCode = parts[1];
+                    // Cek ketersediaan kolom
+                    const idxInaport = dbColumns.indexOf("INAPORT CODE");
+                    const idxTibaDari = dbColumns.indexOf("TIBA DARI CODE");
+                    if (idxInaport !== -1 && idxTibaDari !== -1) {
+                        isRouteFilterActive = true;
+                    }
+                }
+            }
+
+            // Jalankan Filter
             filteredData = allData.filter(row => {
+                // Filter Teks
                 const matchesText = textInput === "" || row.some(cell => String(cell).toUpperCase().includes(textInput));
                 
+                // Filter Rute (Jika aktif)
                 let matchesRoute = true;
                 if (isRouteFilterActive) {
+                    const idxInaport = dbColumns.indexOf("INAPORT CODE");
+                    const idxTibaDari = dbColumns.indexOf("TIBA DARI CODE");
                     const cellInaport = String(row[idxInaport] || "").toUpperCase();
                     const cellOrigin = String(row[idxTibaDari] || "").toUpperCase();
-                    
-                    // Bandingkan secara EXACT (persis) karena sesama kode 5 huruf
                     matchesRoute = (cellInaport === routeDestCode) && (cellOrigin === routeOriginCode);
                 }
+                
                 return matchesText && matchesRoute;
             });
 
-            currentPage = 1;
-            renderHeader(dbColumns);
-            renderCurrentPage();
-            updateTopRowCount(allData.length || 0, filteredData.length || 0);
+            // Update Statistik jika filter aktif
+            if (isRouteFilterActive && isStatsLoaded) {
+                 const yearMatch = currentDbUrl.match(/(\d{4})/);
+                 const selectedYear = yearMatch ? yearMatch[0] : "";
+                 calculateAndRenderSummary(selectedYear, routeDestCode, routeOriginCode);
+            }
 
-            if (filteredData.length === 0 && allData.length > 0) {
-                document.getElementById('table-wrapper').classList.add('hidden');
-                document.getElementById('empty-state').classList.remove('hidden');
-                document.querySelector('#empty-state h3').innerText = "Data tidak ditemukan";
-                document.querySelector('#empty-state p').innerText = "Coba ubah kata kunci atau filter rute.";
-            } else if (allData.length > 0) {
-                document.getElementById('table-wrapper').classList.remove('hidden');
-                document.getElementById('empty-state').classList.add('hidden');
+            // --- 3. RENDERING ---
+            currentPage = 1;
+            if(dbColumns.length > 0) renderHeader(dbColumns);
+            renderCurrentPage();
+            
+            const topCountEl = document.getElementById('db-filtered-count');
+            const bottomCountEl = document.getElementById('db-filtered-count-bottom');
+            if (topCountEl) topCountEl.innerText = filteredData.length;
+            if (bottomCountEl) bottomCountEl.innerText = filteredData.length;
+
+            // --- 4. SHOW/HIDE TABLE ---
+            // Logika baru: Jika ada data hasil filter, tampilkan. Jika tidak ada hasil filter tapi data asli ada, tampilkan pesan kosong.
+            if (filteredData.length > 0) {
+                tableWrapper.classList.remove('hidden');
+                emptyState.classList.add('hidden');
+            } else {
+                tableWrapper.classList.add('hidden');
+                if (allData.length > 0) {
+                    // Data ada, tapi tidak cocok dengan pencarian
+                    emptyState.classList.remove('hidden');
+                    document.querySelector('#empty-state h3').innerText = "Data tidak ditemukan";
+                } else {
+                    // Data memang kosong dari awal (biasanya handled di autoLoad)
+                    emptyState.classList.remove('hidden');
+                }
+            }
+        }
+
+        async function calculateAndRenderSummary(year, destCode, originCode) {
+            if (!isStatsLoaded) return;
+            const mapping = {
+                'stat-motor': 'SEPEDA MOTOR', 'stat-mobil': 'MOBIL', 'stat-truk-sedang': 'TRUK SEDANG',
+                'stat-truk-besar': 'TRUK BESAR', 'stat-tronton': 'TRONTON', 'stat-trailer': 'TRAILER',
+                'stat-alat-berat': 'ALAT BERAT', 'stat-ton-bongkar': 'TONASE KOMODITI BONGKAR',
+                'stat-ton-kendaraan': 'TONASE KENDARAAN'
+            };
+            const fmt = (n) => n ? Number(n).toLocaleString('id-ID') : '0';
+            Object.keys(mapping).forEach(id => {
+                const el = document.getElementById(id);
+                if(el) el.textContent = '...';
+            });
+
+            try {
+                const query = `
+                    SELECT "SEPEDA MOTOR" as "stat-motor", "MOBIL" as "stat-mobil", "TRUK SEDANG" as "stat-truk-sedang",
+                        "TRUK BESAR" as "stat-truk-besar", "TRONTON" as "stat-tronton", "TRAILER" as "stat-trailer",
+                        "ALAT BERAT" as "stat-alat-berat", "TONASE KOMODITI BONGKAR" as "temp",
+                        "temp" - "TONASE KENDARAAN" as "stat-ton-bongkar", "TONASE KENDARAAN" as "stat-ton-kendaraan"
+                    FROM stats_table 
+                    WHERE CAST(tahun AS VARCHAR) = '${year}' AND "INAPORT CODE" = '${destCode}' AND "TIBA DARI CODE" = '${originCode}'
+                `;
+                const result = await conn.query(query);
+                const data = result.toArray()[0]?.toJSON() || {};
+                Object.keys(mapping).forEach(key => {
+                    const el = document.getElementById(key);
+                    if (el) el.textContent = fmt(data[key] || 0);
+                });
+            } catch (err) {
+                console.error(err);
+                Object.keys(mapping).forEach(id => { document.getElementById(id).textContent = '0'; });
             }
         }
 
@@ -401,13 +560,10 @@
         function renderCurrentPage() {
             const tbody = document.getElementById('table-body');
             tbody.innerHTML = '';
-
             const totalItems = filteredData.length;
             const totalPages = Math.ceil(totalItems / rowsPerPage);
-
             if (currentPage < 1) currentPage = 1;
             if (currentPage > totalPages && totalPages > 0) currentPage = totalPages;
-
             const startIndex = (currentPage - 1) * rowsPerPage;
             const endIndex = Math.min(startIndex + rowsPerPage, totalItems);
             const pageData = filteredData.slice(startIndex, endIndex);
@@ -415,11 +571,9 @@
             pageData.forEach((row, index) => {
                 const tr = document.createElement('tr');
                 tr.className = index % 2 === 0 ? 'bg-white hover:bg-blue-50' : 'bg-gray-50 hover:bg-blue-50';
-                
                 row.forEach((cell, i) => {
                     const td = document.createElement('td');
                     td.className = "px-6 py-4 whitespace-nowrap border-b border-gray-100 text-gray-700 align-top";
-                    
                     if (dbColumns[i].toUpperCase().includes("DETAIL") || dbColumns[i].toUpperCase().includes("BONGKAR_MUAT")) {
                         td.innerHTML = formatDetailJSON(cell);
                     } else {
@@ -432,9 +586,7 @@
 
             document.getElementById('start-row').innerText = totalItems === 0 ? 0 : startIndex + 1;
             document.getElementById('end-row').innerText = endIndex;
-            document.getElementById('total-rows').innerText = totalItems;
             document.getElementById('page-indicator').innerText = `Halaman ${currentPage} dari ${totalPages || 1}`;
-
             document.getElementById('btnPrev').disabled = currentPage <= 1;
             document.getElementById('btnNext').disabled = currentPage >= totalPages;
         }
@@ -454,63 +606,33 @@
 
                 let html = '<div class="flex flex-col gap-3 min-w-[300px] max-w-[500px]">';
                 let hasContent = false;
-
                 if (data.BONGKAR && Array.isArray(data.BONGKAR) && data.BONGKAR.length > 0) {
                     hasContent = true;
-                    html += `
-                    <div class="bg-green-50 p-2 rounded border border-green-200 shadow-sm">
-                        <div class="flex items-center gap-1 mb-1">
-                            <span class="text-xs font-bold text-green-800 bg-green-200 px-2 py-0.5 rounded">BONGKAR</span>
-                        </div>
-                        <table class="w-full sub-table bg-white">
-                            <thead><tr><th>Komoditi</th><th>Jenis</th><th class="text-right">Ton</th><th class="text-right">Unit</th></tr></thead>
-                            <tbody>${data.BONGKAR.map(item => `<tr><td class="font-medium text-gray-700">${item.KOMODITIBONGKAR || '-'}</td><td class="text-xs text-gray-500">${item.JENISBONGKAR || '-'}</td><td class="text-right font-mono">${item.TONBONGKAR || '0'}</td><td class="text-right font-mono">${item.UNITBONGKAR || '0'}</td></tr>`).join('')}</tbody>
-                        </table>
-                    </div>`;
+                    html += `<div class="bg-green-50 p-2 rounded border border-green-200 shadow-sm"><div class="flex items-center gap-1 mb-1"><span class="text-xs font-bold text-green-800 bg-green-200 px-2 py-0.5 rounded">BONGKAR</span></div><table class="w-full sub-table bg-white"><thead><tr><th>Komoditi</th><th>Jenis</th><th class="text-right">Ton</th><th class="text-right">Unit</th></tr></thead><tbody>${data.BONGKAR.map(item => `<tr><td class="font-medium text-gray-700">${item.KOMODITIBONGKAR || '-'}</td><td class="text-xs text-gray-500">${item.JENISBONGKAR || '-'}</td><td class="text-right font-mono">${item.TONBONGKAR || '0'}</td><td class="text-right font-mono">${item.UNITBONGKAR || '0'}</td></tr>`).join('')}</tbody></table></div>`;
                 }
-
                 if (data.MUAT && Array.isArray(data.MUAT) && data.MUAT.length > 0) {
                     hasContent = true;
-                    html += `
-                    <div class="bg-blue-50 p-2 rounded border border-blue-200 shadow-sm">
-                        <div class="flex items-center gap-1 mb-1">
-                            <span class="text-xs font-bold text-blue-800 bg-blue-200 px-2 py-0.5 rounded">MUAT</span>
-                        </div>
-                        <table class="w-full sub-table bg-white">
-                            <thead><tr><th>Komoditi</th><th>Jenis</th><th class="text-right">Ton</th><th class="text-right">Unit</th></tr></thead>
-                            <tbody>${data.MUAT.map(item => `<tr><td class="font-medium text-gray-700">${item.KOMODITIMUAT || '-'}</td><td class="text-xs text-gray-500">${item.JENISMUAT || '-'}</td><td class="text-right font-mono">${item.TONMUAT || '0'}</td><td class="text-right font-mono">${item.UNITMUAT || '0'}</td></tr>`).join('')}</tbody>
-                        </table>
-                    </div>`;
+                    html += `<div class="bg-blue-50 p-2 rounded border border-blue-200 shadow-sm"><div class="flex items-center gap-1 mb-1"><span class="text-xs font-bold text-blue-800 bg-blue-200 px-2 py-0.5 rounded">MUAT</span></div><table class="w-full sub-table bg-white"><thead><tr><th>Komoditi</th><th>Jenis</th><th class="text-right">Ton</th><th class="text-right">Unit</th></tr></thead><tbody>${data.MUAT.map(item => `<tr><td class="font-medium text-gray-700">${item.KOMODITIMUAT || '-'}</td><td class="text-xs text-gray-500">${item.JENISMUAT || '-'}</td><td class="text-right font-mono">${item.TONMUAT || '0'}</td><td class="text-right font-mono">${item.UNITMUAT || '0'}</td></tr>`).join('')}</tbody></table></div>`;
                 }
                 html += '</div>';
                 return hasContent ? html : '<span class="text-gray-400 italic">-</span>';
             } catch (e) {
-                return `<span class="text-gray-500 text-xs">${String(jsonInput).substring(0, 50)}...</span>`;
+                return `<span class="text-gray-500 text-xs truncate max-w-[200px] inline-block">${jsonInput}</span>`;
             }
         }
 
         function showLoading(isLoading, text = "Memproses...") {
             const el = document.getElementById('status');
             document.getElementById('status-text').innerText = text;
-            if (isLoading) el.classList.remove('hidden');
-            else el.classList.add('hidden');
-        }
-
-        function updateTopRowCount(totalCount, filteredCount) {
-            const filteredEl = document.getElementById('db-filtered-count');
-            if (filteredEl) filteredEl.innerText = filteredCount || 0;
+            if (isLoading) el.classList.remove('hidden'); else el.classList.add('hidden');
         }
 
         function showError(msg) {
             const el = document.getElementById('error');
             el.innerHTML = `<strong>Error:</strong> ${msg}`;
             el.classList.remove('hidden');
-            updateTopRowCount(0, 0);
         }
-        
-        function hideError() {
-            document.getElementById('error').classList.add('hidden');
-        }
+        function hideError() { document.getElementById('error').classList.add('hidden'); }
     </script>
 </body>
 </html>
