@@ -39,13 +39,8 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
                         </svg>
                     </div>
+                    <!-- Opsi akan di-generate oleh JavaScript -->
                     <select id="yearSelect" class="appearance-none bg-blue-50 border border-blue-200 text-blue-900 text-sm font-bold py-2.5 pl-10 pr-10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer hover:bg-blue-100 transition-all shadow-sm">
-                        <option value="Data 2024.parquet" selected>Data Tahun 2024</option>
-                        <option value="Data 2023.parquet">Data Tahun 2023</option>
-                        <option value="Data 2022.parquet">Data Tahun 2022</option>
-                        <option value="Data 2021.parquet">Data Tahun 2021</option>
-                        <option value="Data 2020.parquet">Data Tahun 2020</option>
-                        <option value="Data 2019.parquet">Data Tahun 2019</option>
                     </select>
                     <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-blue-600">
                         <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
@@ -348,10 +343,19 @@
     <script type="module">
         import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/+esm';
 
-        // --- KONFIGURASI FILE ---
-        let currentDbUrl = 'Data 2024.parquet'; 
-        const statsDbUrl = 'statistik.parquet';
+        // --- KONFIGURASI FOLDER ---
+        const DB_FOLDER = './database/';
+        const STATS_FILENAME = 'statistik.parquet';
         
+        // --- KONFIGURASI SCANNING OTOMATIS ---
+        // Script akan mengecek ketersediaan file dari tahun ini + 1 mundur sampai tahun min_year
+        const MIN_SCAN_YEAR = 2019; 
+        const MAX_SCAN_YEAR = new Date().getFullYear(); 
+
+        let currentDbUrl = ''; 
+        const statsDbUrl = DB_FOLDER + STATS_FILENAME;
+        
+        // Mapping Kode Pelabuhan
         const portCodes = {
             "Surabaya": "IDSUB", "Banjarmasin": "IDBDJ", "Balikpapan": "IDBPN", "Kumai": "IDKUM",
             "Sampit": "IDSMQ", "Makassar": "IDMAK", "Lembar": "IDLBR", "Labuan Bajo": "IDLBO",
@@ -381,12 +385,78 @@
         let filteredData = [];   
         let dbColumns = [];      
         let isStatsLoaded = false;
-        
         let currentPage = 1;
         let rowsPerPage = 10;
 
+        window.addEventListener('DOMContentLoaded', async () => {
+            initRouteOptions();
+            
+            // 1. Scan dulu file apa saja yang ada
+            await scanAvailableFiles();
+
+            // 2. Baru inisialisasi Database
+            initDuckDB();
+        });
+
+        // --- FUNGSI DETEKSI FILE OTOMATIS ---
+        async function scanAvailableFiles() {
+            const select = document.getElementById('yearSelect');
+            select.innerHTML = '<option>Sedang memindai file...</option>';
+            select.disabled = true;
+
+            const availableFiles = [];
+            const checkPromises = [];
+
+            // Loop range tahun untuk dicek (Parallel requests agar cepat)
+            for (let year = MAX_SCAN_YEAR; year >= MIN_SCAN_YEAR; year--) {
+                const fileName = `Data ${year}.parquet`;
+                const filePath = `${DB_FOLDER}${fileName}`;
+                
+                // Buat Promise pengecekan
+                const check = fetch(filePath, { method: 'HEAD' })
+                    .then(response => {
+                        if (response.ok) {
+                            return { year: year, path: filePath, name: fileName };
+                        }
+                        return null;
+                    })
+                    .catch(() => null); // Abaikan error (misal file tidak ada)
+
+                checkPromises.push(check);
+            }
+
+            // Tunggu semua pengecekan selesai
+            const results = await Promise.all(checkPromises);
+            
+            // Filter hanya yang ditemukan (tidak null) & urutkan descending
+            const foundFiles = results.filter(r => r !== null).sort((a, b) => b.year - a.year);
+
+            select.innerHTML = ''; // Kosongkan
+            
+            if (foundFiles.length > 0) {
+                foundFiles.forEach(file => {
+                    const option = document.createElement('option');
+                    option.value = file.path;
+                    option.textContent = `Data Tahun ${file.year}`;
+                    select.appendChild(option);
+                });
+                
+                // Set default ke yang paling baru
+                select.selectedIndex = 0;
+                currentDbUrl = select.value;
+                select.disabled = false;
+            } else {
+                const option = document.createElement('option');
+                option.textContent = "Tidak ada file database ditemukan";
+                select.appendChild(option);
+            }
+        }
+
         async function initDuckDB() {
             try {
+                // Cek jika URL kosong (tidak ada file ditemukan)
+                if(!currentDbUrl) return;
+
                 const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
                 const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
                 const worker_url = URL.createObjectURL(
@@ -420,7 +490,7 @@
                 
                 isStatsLoaded = true;
             } catch (e) {
-                console.warn("Gagal load statistik:", e);
+                console.warn("Gagal load statistik (Mungkin file belum ada di folder database):", e);
             }
         }
 
@@ -476,11 +546,6 @@
             }
         }
 
-        window.addEventListener('DOMContentLoaded', () => {
-            initRouteOptions();
-            initDuckDB();
-        });
-
         document.getElementById('yearSelect').addEventListener('change', (e) => {
             currentDbUrl = e.target.value;
             autoLoadDatabase();
@@ -535,17 +600,14 @@
             const textInput = document.getElementById('searchInput').value.toUpperCase();
             const routeInput = document.getElementById('routeSelect').value;
             
-            // --- 1. VISIBILITY SETTING ---
             const summaryDiv = document.getElementById('summary-stats');
             const tableWrapper = document.getElementById('table-wrapper');
             const emptyState = document.getElementById('empty-state');
 
-            // Jika "Semua Lintasan" (routeInput kosong), sembunyikan statistik
             if (!routeInput || routeInput === "") {
                 summaryDiv.classList.add('hidden');
             } else {
                 summaryDiv.classList.remove('hidden');
-                // Setup Teks Header Statistik
                 const selectElement = document.getElementById('routeSelect');
                 const selectedText = selectElement.options[selectElement.selectedIndex].text;
                 document.getElementById('summary-route-name').textContent = selectedText;
@@ -555,7 +617,6 @@
                 document.getElementById('stats-year-display').textContent = selectedYear;
             }
 
-            // --- 2. FILTERING LOGIC ---
             let routeDestCode = "";
             let routeOriginCode = "";
             let isRouteFilterActive = false;
@@ -565,7 +626,6 @@
                 if(parts.length === 2) {
                     routeDestCode = parts[0]; 
                     routeOriginCode = parts[1];
-                    // Cek ketersediaan kolom
                     const idxInaport = dbColumns.indexOf("INAPORT CODE");
                     const idxTibaDari = dbColumns.indexOf("TIBA DARI CODE");
                     if (idxInaport !== -1 && idxTibaDari !== -1) {
@@ -574,12 +634,8 @@
                 }
             }
 
-            // Jalankan Filter
             filteredData = allData.filter(row => {
-                // Filter Teks
                 const matchesText = textInput === "" || row.some(cell => String(cell).toUpperCase().includes(textInput));
-                
-                // Filter Rute (Jika aktif)
                 let matchesRoute = true;
                 if (isRouteFilterActive) {
                     const idxInaport = dbColumns.indexOf("INAPORT CODE");
@@ -588,18 +644,15 @@
                     const cellOrigin = String(row[idxTibaDari] || "").toUpperCase();
                     matchesRoute = (cellInaport === routeDestCode) && (cellOrigin === routeOriginCode);
                 }
-                
                 return matchesText && matchesRoute;
             });
 
-            // Update Statistik jika filter aktif
             if (isRouteFilterActive && isStatsLoaded) {
                  const yearMatch = currentDbUrl.match(/(\d{4})/);
                  const selectedYear = yearMatch ? yearMatch[0] : "";
                  calculateAndRenderSummary(selectedYear, routeDestCode, routeOriginCode);
             }
 
-            // --- 3. RENDERING ---
             currentPage = 1;
             if(dbColumns.length > 0) renderHeader(dbColumns);
             renderCurrentPage();
@@ -609,19 +662,15 @@
             if (topCountEl) topCountEl.innerText = filteredData.length;
             if (bottomCountEl) bottomCountEl.innerText = filteredData.length;
 
-            // --- 4. SHOW/HIDE TABLE ---
-            // Logika baru: Jika ada data hasil filter, tampilkan. Jika tidak ada hasil filter tapi data asli ada, tampilkan pesan kosong.
             if (filteredData.length > 0) {
                 tableWrapper.classList.remove('hidden');
                 emptyState.classList.add('hidden');
             } else {
                 tableWrapper.classList.add('hidden');
                 if (allData.length > 0) {
-                    // Data ada, tapi tidak cocok dengan pencarian
                     emptyState.classList.remove('hidden');
                     document.querySelector('#empty-state h3').innerText = "Data tidak ditemukan";
                 } else {
-                    // Data memang kosong dari awal (biasanya handled di autoLoad)
                     emptyState.classList.remove('hidden');
                 }
             }
@@ -657,7 +706,6 @@
                     if (el) el.textContent = fmt(data[key] || 0);
                 });
             } catch (err) {
-                console.error(err);
                 Object.keys(mapping).forEach(id => { document.getElementById(id).textContent = '0'; });
             }
         }
