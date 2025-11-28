@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Data Inaport & Statistik</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     <style>
         /* Custom Scrollbar */
         .table-container::-webkit-scrollbar { height: 12px; width: 12px; }
@@ -101,7 +102,13 @@
                         <svg class="w-5 h-5 mx-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
                         Statistik Lintasan <span id="stats-year-display" class="ml-1">...</span>
                     </h3>
-                    <div class="flex gap-2 max-md:flex-col">
+                    <div class="flex gap-2 max-md:flex-col items-center">
+                        <button id="exportBtn" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs py-1.5 px-3 rounded-full transition-colors shadow-sm flex items-center justify-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 2l5 5h-5V4zM8.5 18v-1.5H7v-1h1.5V14H7v-1h1.5v-1.5h1V13H11v1H9.5v1.5H11v1H9.5V18h-1zm3.5-5h2.5v1h-1.5v1h1.5v1h-1.5v1H14v1h-2v-5z"/>
+                            </svg>
+                            Export XLSX
+                        </button>
                         <span id="summary-route-name" class="text-xs font-bold text-blue-700 bg-blue-100 px-3 py-1.5 rounded-full border border-blue-200"></span>
                         <div id="header-count" class="text-xs font-bold text-blue-700 bg-blue-100 px-3 py-1.5 rounded-full border border-blue-200">
                             <span class="text-xs font-bold">Jumlah data: <span id="db-filtered-count" class="font-bold">0</span>
@@ -381,12 +388,14 @@
 
         let db = null;
         let conn = null;
-        let allData = [];        
-        let filteredData = [];   
-        let dbColumns = [];      
+        let allData = [];
+        let filteredData = [];
+        let dbColumns = [];
         let isStatsLoaded = false;
         let currentPage = 1;
         let rowsPerPage = 10;
+        let xlsxModule = null;
+        let xlsxModulePromise = null;
 
         window.addEventListener('DOMContentLoaded', async () => {
             initRouteOptions();
@@ -564,6 +573,47 @@
         document.getElementById('searchInput').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') performSearch();
         });
+        document.getElementById('exportBtn').addEventListener('click', exportFilteredToXLSX);
+
+        async function loadXLSXModule() {
+            // XLSX sudah dimuat via <script> tag di <head>
+            if (window.XLSX) {
+                xlsxModule = window.XLSX;
+                return xlsxModule;
+            }
+            
+            // Fallback: coba muat ulang jika belum ada
+            if (xlsxModule) return xlsxModule;
+            if (!xlsxModulePromise) {
+                xlsxModulePromise = new Promise((resolve, reject) => {
+                    if (window.XLSX) {
+                        resolve(window.XLSX);
+                        return;
+                    }
+
+                    const existingScript = document.getElementById('xlsx-cdn-script');
+                    const script = existingScript || document.createElement('script');
+                    script.src = './xlsx.full.min.js'; // Local fallback
+                    script.id = 'xlsx-cdn-script';
+                    script.async = true;
+                    script.onload = () => resolve(window.XLSX);
+                    script.onerror = () => reject(new Error('Pustaka XLSX tidak dapat dimuat. Silakan unduh xlsx.full.min.js dari https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js dan letakkan di folder yang sama dengan index.html.'));
+                    if (!existingScript) {
+                        document.head.appendChild(script);
+                    }
+                });
+            }
+
+            try {
+                xlsxModule = await xlsxModulePromise;
+                if (!xlsxModule) throw new Error('Objek XLSX tidak ditemukan setelah script dimuat.');
+                return xlsxModule;
+            } catch (err) {
+                err.isXLSXLoadError = true;
+                showError(`Gagal memuat pustaka XLSX: ${err.message}`);
+                throw err;
+            }
+        }
 
         function initRouteOptions() {
             const select = document.getElementById('routeSelect');
@@ -661,6 +711,9 @@
             const bottomCountEl = document.getElementById('db-filtered-count-bottom');
             if (topCountEl) topCountEl.innerText = filteredData.length;
             if (bottomCountEl) bottomCountEl.innerText = filteredData.length;
+            const exportBtn = document.getElementById('exportBtn');
+            // Export hanya aktif jika ada lintasan dipilih DAN ada data
+            if (exportBtn) exportBtn.disabled = !isRouteFilterActive || filteredData.length === 0;
 
             if (filteredData.length > 0) {
                 tableWrapper.classList.remove('hidden');
@@ -672,6 +725,169 @@
                     document.querySelector('#empty-state h3').innerText = "Data tidak ditemukan";
                 } else {
                     emptyState.classList.remove('hidden');
+                }
+            }
+        }
+
+        async function exportFilteredToXLSX() {
+            if (filteredData.length === 0) {
+                alert('Tidak ada data hasil filter untuk diekspor.');
+                return;
+            }
+
+            try {
+                const XLSX = await loadXLSXModule();
+                
+                // Cari index kolom DETAIL_BONGKAR_MUAT
+                const detailColIndex = dbColumns.findIndex(col => 
+                    col.toUpperCase().includes("DETAIL") || col.toUpperCase().includes("BONGKAR_MUAT")
+                );
+                
+                // Buat header baru - ganti kolom DETAIL dengan kolom BONGKAR dan MUAT
+                // Cutoff at column AR (index 43) - only include columns A to AQ
+                const maxColumns = 43; // Column AR onwards will be cut off
+                let newHeaders = [];
+                let colCount = 0;
+                
+                for (let idx = 0; idx < dbColumns.length && colCount < maxColumns; idx++) {
+                    const col = dbColumns[idx];
+                    if (idx === detailColIndex) {
+                        const bongkarMuatCols = ['BONGKAR_KOMODITI', 'BONGKAR_JENIS', 'BONGKAR_TON', 'BONGKAR_M3', 'BONGKAR_UNIT',
+                                                  'MUAT_KOMODITI', 'MUAT_JENIS', 'MUAT_TON', 'MUAT_M3', 'MUAT_UNIT'];
+                        for (const bmCol of bongkarMuatCols) {
+                            if (colCount < maxColumns) {
+                                newHeaders.push(bmCol);
+                                colCount++;
+                            }
+                        }
+                    } else {
+                        newHeaders.push(col);
+                        colCount++;
+                    }
+                }
+                
+                // Transform data - setiap item BONGKAR/MUAT jadi baris terpisah
+                const rows = [];
+                const merges = []; // Array untuk menyimpan info merge cells
+                let currentRow = 1; // Mulai dari baris 1 (baris 0 adalah header)
+                
+                // Tentukan kolom mana yang perlu di-merge (kolom non-detail)
+                const nonDetailColIndices = [];
+                let headerIdx = 0;
+                for (let idx = 0; idx < dbColumns.length && headerIdx < maxColumns; idx++) {
+                    if (idx === detailColIndex) {
+                        headerIdx += Math.min(10, maxColumns - headerIdx); // 5 kolom BONGKAR + 5 kolom MUAT
+                    } else {
+                        nonDetailColIndices.push(headerIdx);
+                        headerIdx++;
+                    }
+                }
+                
+                filteredData.forEach(row => {
+                    let detail = null;
+                    let bongkarItems = [];
+                    let muatItems = [];
+                    
+                    if (detailColIndex !== -1) {
+                        detail = row[detailColIndex];
+                        if (detail) {
+                            try {
+                                if (typeof detail === 'string') detail = JSON.parse(detail);
+                                if (typeof detail === 'string') detail = JSON.parse(detail);
+                                bongkarItems = detail.BONGKAR || [];
+                                muatItems = detail.MUAT || [];
+                            } catch (e) {}
+                        }
+                    }
+                    
+                    // Tentukan jumlah baris yang diperlukan (max dari BONGKAR dan MUAT, minimal 1)
+                    const numRows = Math.max(bongkarItems.length, muatItems.length, 1);
+                    const startRow = currentRow;
+                    
+                    for (let i = 0; i < numRows; i++) {
+                        const entry = {};
+                        let hIdx = 0;
+                        
+                        for (let idx = 0; idx < dbColumns.length && hIdx < newHeaders.length; idx++) {
+                            const col = dbColumns[idx];
+                            if (idx === detailColIndex) {
+                                // Isi kolom BONGKAR
+                                const bItem = bongkarItems[i] || {};
+                                if (hIdx < newHeaders.length) entry[newHeaders[hIdx++]] = bItem.KOMODITIBONGKAR || '-';
+                                if (hIdx < newHeaders.length) entry[newHeaders[hIdx++]] = bItem.JENISBONGKAR || '-';
+                                if (hIdx < newHeaders.length) entry[newHeaders[hIdx++]] = bItem.TONBONGKAR || '-';
+                                if (hIdx < newHeaders.length) entry[newHeaders[hIdx++]] = bItem.M3BONGKAR || '-';
+                                if (hIdx < newHeaders.length) entry[newHeaders[hIdx++]] = bItem.UNITBONGKAR || '-';
+                                
+                                // Isi kolom MUAT
+                                const mItem = muatItems[i] || {};
+                                if (hIdx < newHeaders.length) entry[newHeaders[hIdx++]] = mItem.KOMODITIMUAT || '-';
+                                if (hIdx < newHeaders.length) entry[newHeaders[hIdx++]] = mItem.JENISMUAT || '-';
+                                if (hIdx < newHeaders.length) entry[newHeaders[hIdx++]] = mItem.TONMUAT || '-';
+                                if (hIdx < newHeaders.length) entry[newHeaders[hIdx++]] = mItem.M3MUAT || '-';
+                                if (hIdx < newHeaders.length) entry[newHeaders[hIdx++]] = mItem.UNITMUAT || '-';
+                            } else {
+                                let value = row[idx];
+                                if (value && typeof value === 'object') {
+                                    try {
+                                        value = JSON.stringify(value);
+                                    } catch (err) {
+                                        value = String(value);
+                                    }
+                                }
+                                // Hanya isi data di baris pertama, baris selanjutnya kosong untuk kolom non-detail
+                                entry[newHeaders[hIdx++]] = (i === 0) ? (value ?? '-') : '';
+                            }
+                        }
+                        
+                        rows.push(entry);
+                        currentRow++;
+                    }
+                    
+                    // Tambahkan merge untuk kolom non-detail jika numRows > 1
+                    if (numRows > 1) {
+                        nonDetailColIndices.filter(colIdx => colIdx < maxColumns).forEach(colIdx => {
+                            merges.push({
+                                s: { r: startRow, c: colIdx }, // start: row, col
+                                e: { r: startRow + numRows - 1, c: colIdx } // end: row, col
+                            });
+                        });
+                    }
+                });
+
+                const worksheet = XLSX.utils.json_to_sheet(rows, { header: newHeaders });
+                
+                // Set the worksheet range to only include columns up to maxColumns
+                const lastCol = newHeaders.length - 1;
+                const lastRow = rows.length; // +1 for header is already included in json_to_sheet
+                worksheet['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: lastRow, c: lastCol } });
+                
+                // Set default column width to 100 pixels (approximately 14 characters in Excel)
+                const colWidth = 14; // ~100 pixels
+                worksheet['!cols'] = newHeaders.map(() => ({ wch: colWidth }));
+                
+                // Apply merge cells
+                if (merges.length > 0) {
+                    worksheet['!merges'] = merges;
+                }
+                
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, worksheet, 'FilteredData');
+
+                const yearMatch = currentDbUrl.match(/(\d{4})/);
+                const selectedYear = yearMatch ? yearMatch[0] : 'semua-tahun';
+                const routeSelect = document.getElementById('routeSelect');
+                const routeLabel = routeSelect.value ? routeSelect.options[routeSelect.selectedIndex].text : 'semua-lintasan';
+                const safeRoute = routeLabel
+                    .toLowerCase()
+                    .replace(/\s+/g, '-')
+                    .replace(/[^a-z0-9_-]/g, '');
+                const fileName = `inaport_${selectedYear}_${safeRoute}_filtered.xlsx`;
+
+                XLSX.writeFile(workbook, fileName);
+            } catch (err) {
+                if (!err?.isXLSXLoadError) {
+                    showError(`Gagal mengekspor data: ${err.message}`);
                 }
             }
         }
