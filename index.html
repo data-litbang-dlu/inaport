@@ -731,11 +731,8 @@
                 return matchesText && matchesRoute;
             });
 
-            if (isRouteFilterActive && isStatsLoaded) {
-                 const yearMatch = currentDbUrl.match(/(\d{4})/);
-                 const selectedYear = yearMatch ? yearMatch[0] : "";
-                 calculateAndRenderSummary(selectedYear, routeDestCode, routeOriginCode);
-            }
+            // Calculate statistics from filtered data
+            calculateAndRenderSummary();
 
             currentPage = 1;
             if(dbColumns.length > 0) renderHeader(dbColumns);
@@ -934,8 +931,7 @@
             }
         }
 
-        async function calculateAndRenderSummary(year, destCode, originCode) {
-            if (!isStatsLoaded) return;
+        function calculateAndRenderSummary() {
             const mapping = {
                 'stat-motor': 'SEPEDA MOTOR', 'stat-mobil': 'MOBIL', 'stat-truk-sedang': 'TRUK SEDANG',
                 'stat-truk-besar': 'TRUK BESAR', 'stat-tronton': 'TRONTON', 'stat-trailer': 'TRAILER',
@@ -943,29 +939,160 @@
                 'stat-ton-kendaraan': 'TONASE KENDARAAN'
             };
             const fmt = (n) => n ? Number(n).toLocaleString('id-ID') : '0';
-            Object.keys(mapping).forEach(id => {
-                const el = document.getElementById(id);
-                if(el) el.textContent = '...';
+            
+            // Vehicle classification lists
+            const SEPEDA_MOTOR = [
+                'SEPEDA MOTOR', 'MOTOR', 'MOTOR (2 RODA)', 'Motor', 'SEPEDAMOTOR', 'motor', 'sepeda motor', 'GOL II - SEPEDA MOTOR <500CC',
+                'GOL III - SEPEDA MOTOR >500CC', 'KENDARAAN BERMOTOR RODA DUA (U', 'KENDARAAN BERMOTOR RODA DUA', 'KENDARAAAN BERMOTOR RODA DUA',
+                'Sepeda Motor', 'MOTOR TRAIL', 'S. MOTOR', 's. motor', 'SEPEDA  MOTOR', 'SEPDA MOTOR', 'SEPEDA MOTOR s/d 750CC (GOL II)',
+                'MOTOR VIXION', 'SPD MOTOR', 'MOTOR HONDA', 'MOTOR SATRIA FU', 'MOTORCYCLE', 'Barang pindahan (Motor)', 'KENDARAAN BERMOTOR RODA DUA (UNIT)',
+                'MOTORO', 'SEPEDA MOTOR s/d 750 CC', 'Gol II - Sepeda Motor', 'MOTOR (PENUMPANGAN)', 'SEPEDAMOTOR DAN ALATNYA', 'Sepedamotor dan alatnya',
+                'KENDARAAN GOLONGAN II', 'kendaraan gol II', 'KENDARAAN GOL II', 'KENDARAAN GOLOGNGAN II', 'KENDARAAAN GOLONGAN II', 'KENDARAAN GOL.II',
+                'KENDRAAN GOLONGAN II', 'KENDARAAN GOLONAGN II', 'Kendaraan golongan II', 'Kendaraan Golongan II', 'KENDARAAN BERMOTOR LAINNYA (M3'
+            ];
+            const MOBIL = [
+                'MOBIL', 'MOBIL KECIL', 'MOBIL KECIL (4 RODA)', 'Mobil', 'GOL IV BRG - MOBIL BARANG', 'GOL IV PNP - MOBIL SEDAN', 'MOBIL SEDANG (4 RODA)',
+                'MOBIL KELUARGA', 'MOBIL BESAR', 'MOBIL DOUBLE CABIN', 'MOBIL (PENUMPANG)', 'MOBIL BARANG', 'mobil', 'MOBIL (RO-RO)', 'MOBIL ESTRADA',
+                'MOBIL HILUX', 'MOBIL BOX', 'KENDARAAN GOLONGAN III', 'kendaraan gol III', 'KENDARAAN GOL III', 'KENDARAAN GOLOGNGAN III',
+                'KENDARAAAN GOLONGAN III', 'KENDARAAN GOLONAGN III', 'CAMRY/PAJERO/ALPHARD >1500CC (GOL III.B)', 'SEDAN/JEEP/MINIBUS s/d 1500CC (GOL III.A)',
+                'CAMRY/PAJERO/ALPHARD >1500CC (GOL III.B', 'SEDAN/JEEP/MINIBUS s/d 2000CC (GOL III.A)',
+                'CAMRY/PAJERO/ALPHARD >2000CC (GOL III.B', 'Gol IV A - Sedan, Jeep dan sejenisnya', 'Gol IV B - Kendaraan Kecil Barang', 'Kendaraan Golongan III', 'KENDARAAAN BERMOTOR RODA EMPAT', 'KENDARAAN BERMOTOR RODA EMPAT'
+            ];
+            const TRUK_SEDANG = [
+                'TRUK DUTRO', 'TRUK SEDANG 16 s/d 20 TON/M3 (PENUMPANG)', 'TRUK SEDANG', 'Truk sedang', 'TRUK KECIL', 'Truk Kecil', 'TRUK FUSO',
+                'TRUK PS', 'GOL V BRG - TRUK SEDANG', 'TRUK TS', 'TRUK ECIL', 'MOBIL TRUCK', 'TRUK SEDANG LONG CHASIS MAX 8M (GOL IV.B)',
+                'TRUK SEDANG LONG CHASIS MAX 8M (GOL IV.B) ISI', 'Truk Sedang', 'Gol V B - Truk Sedang', 'Truk dan Bus 28 s/d 33 Ton/M3 (VHC)',
+                'Truk dan Bus < 28 Ton/M3 (VHC)', 'KENDARAAN GOLONGAN IV', 'kendaraan gol IV', 'KENDARAAN GOL IV', 'GOL V PNP - BUS SEDANG',
+                'GOL V PNP - BUS KECIL', 'KENDARAAN GOLOGNGAN IV', 'KENDARAAAN GOLONGAN IV', 'KENDARAAN GOL IVB', 'KENDARAAN GOL IVA',
+                'KENDARAAN GOL.IVA', 'KENDARAAN GOL.IVB', 'KENDARAAN GOLONAGN IV', 'TRUK/BUS SEDANG MAX 6M (GOL IV.A) ISI',
+                'TRUK/BUS SEDANG MAX 6M (GOL IV.A)', 'TRUK/BUS SEDANG MAX 6M (GOL IV.A', 'KENDARAAN GOLONGAN IVA', 'KENDARAAN GOLONGAN IVB',
+                'KENDARAAN GOLONGAN  IV', 'Kendaraan golongan IV', 'kendaraan gol iv', '"TRUK/BUS SEDANG MAX 6M (GOL IV.A) ISI"',
+                'TRUK/BUS SEDANG MAX 6M (GOL IV.A) Isi', 'TRUK/BUS SEDANG MAX 6M (GOL IV.A) IS', 'Kendaraan Golongan IV', 'MOBILTRUK/BUS'
+            ];
+            const TRUK_BESAR = [
+                'DUMP TRUCK', 'DUMP TRUCK MIXER', 'DUMP TRUCK SANY', 'TRUK BESAR', 'DUMP TRUCK KOMATSU', 'DUMP TRUK KOMATSU 400', 'DUMP TRUK KOMATSU MDL HD785-7 & GENERAL CARGO',
+                'GOL VI BRG - TRUK BESAR', 'GOL VII BRG - TRUK BESAR', 'Truk besar', 'Truk Besar', 'Dump Truck', 'Dump Truck Sany - SYZ380',
+                'TRUK BESAR LONG CHASIS MAX 10M (GOL V.B) ISI', 'Manhauler Truck', 'VESEL DUMP TRUCK', 'TRUK  BESAR', 'TRUK BESAR LONG CHASIS MAX 10M (GOL V.B)',
+                'Gol VI B - Truk Besar', 'Truk dan Bus 33 s/d 40 Ton/M3 (VHC)', 'KENDARAAN GOLONGAN V', 'KENDARAAN GOLONGAN VB', 'kendaraan gol V',
+                'KENDARAAN GOL V', 'GOL VI PNP - BUS BESAR', 'GOL VII PNP - BUS BESAR', 'KENDARAAN GOLOGNGAN V', 'KENDARAAAN GOLONGAN V',
+                'KENDARAAN GOL VB', 'KENDARAAN GOL VA', 'KENDARAAN GOL.VB', 'TRUK/BUS BESAR MAX 8M (GOL V.A) ISI', 'Kendaraan golongan V',
+                'kendaraan gol v', 'TRUK/BUS BESAR MAX 8M (GOL V.A)', 'Kendaraan Golongan V', 'MOBIL TANGKI', 'MOBIL WATER TANK', 'MOBIL TRUK', 'MOBILASPHAL'
+            ];
+            const TRONTON = [
+                'TRUK TRONTON', 'TRUK MIXER', 'GOL VII - TRUK TRONTON', 'Lube Truck', 'ANFO TRUCK', 'HEAD TRUCK', 'SEMEN BAG VIA TRUCK',
+                'TRUCK TRONTON', 'TRONTON', 'GOL VII BRG - TRONTON', 'Tronton', 'GOL VII - TRONTON', 'TRONTON STANDARD MAX 10M (GOL VI.A',
+                'TRONTONE', 'TRONTON STANDARD MAX 10M (GOL VI.A)', 'TRONTON LONG CHASIS MAX 13M (GOL VI.B)', 'TRONTON STANDARD MAX 10M (GOL VI.A) ISI',
+                'Gol VII - Tronton', 'TRUCK TRONTON BERMUATAN', 'KENDARAAN GOLONGAN VI', 'KENDARAAN GOLONGAN VIB', 'kendaraan gol VI',
+                'KENDARAAN GOL VI', 'KENDARAAN GOLOGNGAN VI', 'KENDARAAAN GOLONGAN VI', 'KENDARAAN GOL VIB', 'KENDARAAN GOL VIA',
+                'KENDARAAN GOL.VIB', 'KENDARAAN GOLONGAN VIA', 'Kendaraan golongan VI', 'kendaraan gol vi', 'Kendaraan Golongan VI', 'MOBIL LOGGING'
+            ];
+            const ALAT_BERAT = [
+                'ALAT BERAT / TRUK 40 s/d 50 TON/M3', 'ALAT BERAT / TRUK s/d 28 TON/M3', 'ALAT BERAT / TRUK S/D 28 TON/M3', 'ALAT BERAT / TRUK s/d 28TON/M3',
+                'ALAT BERAT / TRUK 33 s/d 40 TON/M3', 'ALAT BERAT / TRUK s/d 28 TON/M2', 'ALAT BERAT / TRUK 28 s/d 33 TON/M3',
+                'ALAT BERAT / TRUK 50 s/d 120 TON/M3 (PENUMPANG)', 'ALAT BERAT', 'ALAT BERAT & AKSESORIS', 'ALAT BERAT & CARGOES',
+                'ALAT BERAT DA BESI BETON', 'Alat Berat', 'ALAT BERAT & CONTAINER', 'ALAT BERAT / MATERIAL', 'ALAT BERAT AND GENERAL CARGO',
+                'alat berat', 'Alat Berat < 28 Ton/M3 (VHC)', 'TRUCK, ALAT BERAT , DLL', 'ALAT BERAT DAN EQUIPMENT', 'ALAT BERAT CRANE',
+                'ALAT BERAT & KENDARAAN', 'ALAT BERAT EXAVATOR', 'ALAT BERAT (GOL VII.A)', 'ALAT BERAT DAN GRABS', 'ALAT BERAT BECO',
+                'Alat Berat > 50 Ton/M3 (VHC)', 'Alat Berat > 120 Ton/M3 (VHC)', 'KENDARAAN GOLONGAN VII', 'KENDARAAN GOL VII',
+                'KENDARAAN GOL.VII', 'Kendaraan Golongan VII', 'DUMP TRUCK,EXCAVATOR,DOZER,COMPATOR,MOTOR GREADER,BAN MOBIL',
+                'MOTOR GRADER', 'MOTOR GREDER', 'MOBIL LV,DUMP TRUCK,EXCAVATOR', 'MOBIL CRANE', 'MOBIL MIXER', 'Harbour Mobile Crane',
+                'mobil crane', 'ALAT BERAT, DUMP TRUK & GENERAL CARGO', 'GENERAL CARGO TRUCK LOSSING'
+            ];
+            const TRAILER = [
+                'GOL IX - TRUK TRAILER PANJANG >16 M', 'GOL VIII - TRUK TRAILER PANJANG >12 M', 'GOL VII - TRUK TRAILER PANJANG <12 M',
+                'KENDARAAN GOLONGAN VIII', 'KENDARAAN GOL VIII', 'KENDARAAN GOL.VIII', 'LCL-MOBIL-MOTOR', 'KENDARAAN GOLONGAN IX'
+            ];
+            const VALID_JENIS_BONGKAR = ['Bag Cargo', 'Unitized', 'Break Bulk', '0'];
+            const VALID_JENIS_KAPAL = [
+                'CAR CARRIER', 'CAR FERRY', 'CONTAINER SHIP', 'FERRY', 'GENERAL CARGO', 'KAPAL CARGO PENUMPANGAN',
+                'KAPAL CRUISE', 'KAPAL LANDING CRAFT TANK (LCT)', 'KAPAL MULTI PURPOSE', 'KAPAL PENUMPANG TRADISIONAL',
+                'PASSENGER', 'PASSENGER FERRY', 'PASSENGER HSC - A', 'PASSENGER HSC - B', 'RO-RO CARGO',
+                'RO-RO FERRY', 'RO-RO PENUMPANG DAN BARANG', 'MOTORIZED SAILING / LAYAR MOTOR',
+                'TONGKANG / BARGE', 'TONGKANG GELADAK (DECK BARGE)'
+            ];
+
+            // Initialize counters
+            let stats = {
+                'stat-motor': 0, 'stat-mobil': 0, 'stat-truk-sedang': 0,
+                'stat-truk-besar': 0, 'stat-tronton': 0, 'stat-trailer': 0,
+                'stat-alat-berat': 0, 'stat-ton-bongkar': 0, 'stat-ton-kendaraan': 0
+            };
+            let totalBongkarTonase = 0; // ALL bongkar tonnage from filtered data
+
+            // Get column indices
+            const detailColIndex = dbColumns.findIndex(col => 
+                col.toUpperCase().includes("DETAIL") || col.toUpperCase().includes("BONGKAR_MUAT")
+            );
+            const jenisKapalIndex = dbColumns.findIndex(col => {
+                const upper = col.toUpperCase().replace(/[_\s]/g, '');
+                return upper.includes("JENISKAPAL");
             });
 
-            try {
-                const query = `
-                    SELECT "SEPEDA MOTOR" as "stat-motor", "MOBIL" as "stat-mobil", "TRUK SEDANG" as "stat-truk-sedang",
-                        "TRUK BESAR" as "stat-truk-besar", "TRONTON" as "stat-tronton", "TRAILER" as "stat-trailer",
-                        "ALAT BERAT" as "stat-alat-berat", "TONASE KOMODITI BONGKAR" as "temp",
-                        "temp" - "TONASE KENDARAAN" as "stat-ton-bongkar", "TONASE KENDARAAN" as "stat-ton-kendaraan"
-                    FROM stats_table 
-                    WHERE CAST(tahun AS VARCHAR) = '${year}' AND "INAPORT CODE" = '${destCode}' AND "TIBA DARI CODE" = '${originCode}'
-                `;
-                const result = await conn.query(query);
-                const data = result.toArray()[0]?.toJSON() || {};
-                Object.keys(mapping).forEach(key => {
-                    const el = document.getElementById(key);
-                    if (el) el.textContent = fmt(data[key] || 0);
-                });
-            } catch (err) {
-                Object.keys(mapping).forEach(id => { document.getElementById(id).textContent = '0'; });
-            }
+            // Process ALL filtered data
+            filteredData.forEach(row => {
+                if (detailColIndex === -1) return;
+                
+                let detail = row[detailColIndex];
+                if (!detail) return;
+                
+                // Check if this row has a valid jenis kapal (for vehicle counting only)
+                const jenisKapal = jenisKapalIndex !== -1 ? (row[jenisKapalIndex] || '') : '';
+                const isValidJenisKapal = VALID_JENIS_KAPAL.includes(jenisKapal);
+                
+                try {
+                    if (typeof detail === 'string') detail = JSON.parse(detail);
+                    if (typeof detail === 'string') detail = JSON.parse(detail);
+                    
+                    const bongkarItems = detail.BONGKAR || [];
+                    
+                    bongkarItems.forEach(item => {
+                        const jenisBongkar = item.JENISBONGKAR || '';
+                        const komoditi = item.KOMODITIBONGKAR || '';
+                        const unit = parseInt(item.UNITBONGKAR) || 0;
+                        const tonase = parseFloat(item.TONBONGKAR) || 0;
+                        
+                        // Add ALL bongkar tonnage (no filters)
+                        totalBongkarTonase += tonase;
+                        
+                        // Only count vehicles if JENIS KAPAL and JENIS BONGKAR are valid
+                        if (isValidJenisKapal && VALID_JENIS_BONGKAR.includes(jenisBongkar)) {
+                            if (SEPEDA_MOTOR.includes(komoditi)) {
+                                stats['stat-motor'] += unit;
+                                stats['stat-ton-kendaraan'] += tonase;
+                            } else if (MOBIL.includes(komoditi)) {
+                                stats['stat-mobil'] += unit;
+                                stats['stat-ton-kendaraan'] += tonase;
+                            } else if (TRUK_SEDANG.includes(komoditi)) {
+                                stats['stat-truk-sedang'] += unit;
+                                stats['stat-ton-kendaraan'] += tonase;
+                            } else if (TRUK_BESAR.includes(komoditi)) {
+                                stats['stat-truk-besar'] += unit;
+                                stats['stat-ton-kendaraan'] += tonase;
+                            } else if (TRONTON.includes(komoditi)) {
+                                stats['stat-tronton'] += unit;
+                                stats['stat-ton-kendaraan'] += tonase;
+                            } else if (ALAT_BERAT.includes(komoditi)) {
+                                stats['stat-alat-berat'] += unit;
+                                stats['stat-ton-kendaraan'] += tonase;
+                            } else if (TRAILER.includes(komoditi)) {
+                                stats['stat-trailer'] += unit;
+                                stats['stat-ton-kendaraan'] += tonase;
+                            }
+                        }
+                    });
+                } catch (e) {
+                    // Skip invalid JSON
+                }
+            });
+
+            // TONASE KOMODITI = ALL bongkar tonnage - vehicle tonnage
+            stats['stat-ton-bongkar'] = totalBongkarTonase - stats['stat-ton-kendaraan'];
+
+            // Update UI
+            Object.keys(mapping).forEach(key => {
+                const el = document.getElementById(key);
+                if (el) el.textContent = fmt(stats[key] || 0);
+            });
         }
 
         function resetSearch() {
