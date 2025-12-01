@@ -911,12 +911,42 @@
                 }
                 
                 const workbook = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(workbook, worksheet, 'FilteredData');
+                XLSX.utils.book_append_sheet(workbook, worksheet, 'Data');
 
+                // Get filter info
                 const yearMatch = currentDbUrl.match(/(\d{4})/);
-                const selectedYear = yearMatch ? yearMatch[0] : 'semua-tahun';
+                const selectedYear = yearMatch ? yearMatch[0] : 'Semua Tahun';
                 const routeSelect = document.getElementById('routeSelect');
-                const routeLabel = routeSelect.value ? routeSelect.options[routeSelect.selectedIndex].text : 'semua-lintasan';
+                const routeLabel = routeSelect.value ? routeSelect.options[routeSelect.selectedIndex].text : 'Semua Lintasan';
+                const searchQuery = document.getElementById('searchInput')?.value?.trim() || '';
+
+                // Create Statistics sheet
+                const statsData = [
+                    ['STATISTIK LINTASAN'],
+                    [],
+                    ['FILTER', 'Nilai'],
+                    ['Tahun', selectedYear],
+                    ['Lintasan', routeLabel],
+                    ['Pencarian', searchQuery || '-'],
+                    [],
+                    ['RINGKASAN', 'Nilai'],
+                    ['Jumlah Data', filteredData.length],
+                    ['Tonase Komoditi (TON)', document.getElementById('stat-ton-bongkar')?.textContent || '0'],
+                    [],
+                    ['KENDARAAN', 'Unit'],
+                    ['Sepeda Motor', document.getElementById('stat-motor')?.textContent || '0'],
+                    ['Mobil', document.getElementById('stat-mobil')?.textContent || '0'],
+                    ['Truk Sedang', document.getElementById('stat-truk-sedang')?.textContent || '0'],
+                    ['Truk Besar', document.getElementById('stat-truk-besar')?.textContent || '0'],
+                    ['Tronton', document.getElementById('stat-tronton')?.textContent || '0'],
+                    ['Alat Berat', document.getElementById('stat-alat-berat')?.textContent || '0'],
+                    ['Trailer', document.getElementById('stat-trailer')?.textContent || '0']
+                ];
+                
+                const statsWorksheet = XLSX.utils.aoa_to_sheet(statsData);
+                statsWorksheet['!cols'] = [{ wch: 25 }, { wch: 30 }];
+                XLSX.utils.book_append_sheet(workbook, statsWorksheet, 'Statistik');
+
                 const safeRoute = routeLabel
                     .toLowerCase()
                     .replace(/\s+/g, '-')
