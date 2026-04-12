@@ -43,13 +43,49 @@ const routeList = [
 ];
 
 const FILTER_META = {
-  kapal: { suffix: 'Kapal', allLabel: 'Semua Kapal', activeLabel: 'Kapal', isPort: false },
-  berangkatKe: { suffix: 'BerangkatKe', allLabel: 'Semua Tujuan', activeLabel: 'Berangkat Ke', isPort: true },
-  tibaDari: { suffix: 'TibaDari', allLabel: 'Semua Asal', activeLabel: 'Tiba Dari', isPort: true },
-  jenisKapal: { suffix: 'JenisKapal', allLabel: 'Semua Jenis', activeLabel: 'Jenis Kapal', isPort: false }
+  kapal: { suffix: 'Kapal', allLabel: 'Semua Kapal', activeLabel: 'Kapal', source: 'column', column: 'KAPAL' },
+  pelabuhan: { suffix: 'Pelabuhan', allLabel: 'Semua Pelabuhan', activeLabel: 'Pelabuhan', source: 'column', column: 'INAPORT CODE', isPort: true },
+  berangkatKe: { suffix: 'BerangkatKe', allLabel: 'Semua Keberangkatan', activeLabel: 'Keberangkatan', source: 'column', column: 'BERANGKAT KE' },
+  tibaDari: { suffix: 'TibaDari', allLabel: 'Semua Kedatangan', activeLabel: 'Kedatangan', source: 'column', column: 'TIBA DARI' },
+  jenisKapal: { suffix: 'JenisKapal', allLabel: 'Semua Jenis Kapal', activeLabel: 'Jenis Kapal', source: 'column', column: 'JENIS KAPAL' },
+  trayek: { suffix: 'Trayek', allLabel: 'Semua Trayek', activeLabel: 'Trayek', source: 'column', column: 'TRAYEK' },
+  muatanBongkar: { suffix: 'MuatanBongkar', allLabel: 'Semua Muatan Datang', activeLabel: 'Muatan Datang', source: 'detailCommodity', direction: 'BONGKAR' },
+  muatanMuat: { suffix: 'MuatanMuat', allLabel: 'Semua Muatan Berangkat', activeLabel: 'Muatan Berangkat', source: 'detailCommodity', direction: 'MUAT' }
 };
 const FILTER_TYPES = Object.keys(FILTER_META);
 const DETAIL_EXPORT_COLUMNS = ['BONGKAR_KOMODITI', 'BONGKAR_JENIS', 'BONGKAR_TON', 'BONGKAR_M3', 'BONGKAR_UNIT', 'MUAT_KOMODITI', 'MUAT_JENIS', 'MUAT_TON', 'MUAT_M3', 'MUAT_UNIT'];
+const DATE_FIELD_IDS = {
+  tibaStart: 'tanggalTibaStart',
+  tibaEnd: 'tanggalTibaEnd',
+  berangkatStart: 'tanggalBerangkatStart',
+  berangkatEnd: 'tanggalBerangkatEnd'
+};
+const TONNAGE_FIELD_IDS = {
+  bongkarMin: 'jumlahBongkarMin',
+  bongkarMax: 'jumlahBongkarMax',
+  muatMin: 'jumlahMuatMin',
+  muatMax: 'jumlahMuatMax'
+};
+const DATE_FILTER_GROUPS = {
+  tiba: {
+    label: 'Tanggal Kedatangan',
+    ids: [DATE_FIELD_IDS.tibaStart, DATE_FIELD_IDS.tibaEnd]
+  },
+  berangkat: {
+    label: 'Tanggal Keberangkatan',
+    ids: [DATE_FIELD_IDS.berangkatStart, DATE_FIELD_IDS.berangkatEnd]
+  }
+};
+const TONNAGE_FILTER_GROUPS = {
+  bongkar: {
+    label: 'Muatan Kedatangan',
+    ids: [TONNAGE_FIELD_IDS.bongkarMin, TONNAGE_FIELD_IDS.bongkarMax]
+  },
+  muat: {
+    label: 'Muatan Keberangkatan',
+    ids: [TONNAGE_FIELD_IDS.muatMin, TONNAGE_FIELD_IDS.muatMax]
+  }
+};
 
 function createFilterState(factory) {
   return Object.fromEntries(FILTER_TYPES.map(filterType => [filterType, factory(filterType)]));
@@ -59,13 +95,30 @@ function getFilterDomId(filterType, part) {
   return `filter${FILTER_META[filterType].suffix}${part}`;
 }
 
+function normalizeColumnName(value = '') {
+  return String(value).toUpperCase().replace(/[_\s]/g, '');
+}
+
+function findColumnIndex(expectedName) {
+  const normalizedExpected = normalizeColumnName(expectedName);
+  return dbColumns.findIndex(col => normalizeColumnName(col) === normalizedExpected);
+}
+
 function getColumnIndexes() {
-  return {
-    kapal: dbColumns.findIndex(col => col.toUpperCase() === 'KAPAL'),
-    berangkatKe: dbColumns.findIndex(col => col.toUpperCase() === 'INAPORT CODE'),
-    tibaDari: dbColumns.findIndex(col => col.toUpperCase() === 'TIBA DARI CODE'),
-    jenisKapal: dbColumns.findIndex(col => col.toUpperCase() === 'JENIS KAPAL')
-  };
+  const indexes = {};
+  FILTER_TYPES.forEach(filterType => {
+    const meta = FILTER_META[filterType];
+    if (meta.source === 'column') {
+      indexes[filterType] = findColumnIndex(meta.column);
+    }
+  });
+
+  indexes.tibaTanggal = findColumnIndex('TIBA TANGGAL');
+  indexes.berangkatTanggal = findColumnIndex('BERANGKAT TANGGAL');
+  indexes.inaportCode = findColumnIndex('INAPORT CODE');
+  indexes.tibaDariCode = findColumnIndex('TIBA DARI CODE');
+  indexes.detail = dbColumns.findIndex(col => isDetailColumn(col));
+  return indexes;
 }
 
 function parseDetailPayload(value) {
@@ -97,6 +150,7 @@ let currentPage = 1;
 let rowsPerPage = 10;
 let xlsxModule = null;
 let xlsxModulePromise = null;
+const rowDetailCache = new WeakMap();
 
 // Excel-like filter state management
 let filterOptions = createFilterState(() => []);
@@ -116,6 +170,357 @@ function formatPortDisplay(code) {
   return `${name} (${code})`;
 }
 
+function getDisplayValue(filterType, value) {
+  return FILTER_META[filterType].isPort ? formatPortDisplay(value) : value;
+}
+
+function parseDateOnly(value) {
+  if (!value) return null;
+  const stringValue = String(value).trim();
+  const datePart = stringValue.includes(' ') ? stringValue.split(' ')[0] : stringValue;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return null;
+  return datePart;
+}
+
+function safeParseNumber(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(String(value).replace(/,/g, '.'));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function debounce(callback, delay = 250) {
+  let timeoutId;
+  return (...args) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => callback(...args), delay);
+  };
+}
+
+function truncateText(text, maxLength = 28) {
+  const value = String(text || '').trim();
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, maxLength - 3)}...`;
+}
+
+function formatNumberForChip(value) {
+  const parsed = safeParseNumber(value);
+  if (parsed === null) return null;
+  return parsed.toLocaleString('id-ID');
+}
+
+function formatDateRangeChip(label, startValue, endValue) {
+  if (startValue && endValue) return `${label}: ${startValue} - ${endValue}`;
+  if (startValue) return `${label}: >= ${startValue}`;
+  if (endValue) return `${label}: <= ${endValue}`;
+  return '';
+}
+
+function formatNumberRangeChip(label, minValue, maxValue) {
+  const minLabel = formatNumberForChip(minValue);
+  const maxLabel = formatNumberForChip(maxValue);
+  if (minLabel && maxLabel) return `${label}: ${minLabel} - ${maxLabel} ton`;
+  if (minLabel) return `${label}: >= ${minLabel} ton`;
+  if (maxLabel) return `${label}: <= ${maxLabel} ton`;
+  return '';
+}
+
+function sumDetailTonnage(items = [], tonField) {
+  return items.reduce((total, item) => total + (safeParseNumber(item?.[tonField]) || 0), 0);
+}
+
+function getRowDetailSummary(row, columnIndexes = getColumnIndexes()) {
+  if (rowDetailCache.has(row)) {
+    return rowDetailCache.get(row);
+  }
+
+  const detail = columnIndexes.detail !== -1 ? parseDetailPayload(row[columnIndexes.detail]) : null;
+  const bongkarItems = Array.isArray(detail?.BONGKAR) ? detail.BONGKAR : [];
+  const muatItems = Array.isArray(detail?.MUAT) ? detail.MUAT : [];
+  const summary = {
+    detail,
+    bongkarKomoditi: bongkarItems.map(item => String(item?.KOMODITIBONGKAR || '').trim()).filter(Boolean),
+    muatKomoditi: muatItems.map(item => String(item?.KOMODITIMUAT || '').trim()).filter(Boolean),
+    bongkarTon: sumDetailTonnage(bongkarItems, 'TONBONGKAR'),
+    muatTon: sumDetailTonnage(muatItems, 'TONMUAT')
+  };
+
+  rowDetailCache.set(row, summary);
+  return summary;
+}
+
+function getRowFilterValues(filterType, row, columnIndexes = getColumnIndexes()) {
+  const meta = FILTER_META[filterType];
+
+  if (meta.source === 'column') {
+    const colIdx = columnIndexes[filterType];
+    if (colIdx === -1) return [];
+    const value = String(row[colIdx] || '').trim();
+    return value ? [value] : [];
+  }
+
+  const detailSummary = getRowDetailSummary(row, columnIndexes);
+  if (meta.direction === 'BONGKAR') return detailSummary.bongkarKomoditi;
+  if (meta.direction === 'MUAT') return detailSummary.muatKomoditi;
+  return [];
+}
+
+function doesRowMatchOptionFilter(filterType, row, columnIndexes = getColumnIndexes()) {
+  const selectedValues = selectedFilters[filterType];
+  if (!selectedValues || selectedValues.size === 0) return true;
+
+  const rowValues = getRowFilterValues(filterType, row, columnIndexes);
+  if (rowValues.length === 0) return false;
+  return rowValues.some(value => selectedValues.has(value));
+}
+
+function doesRowMatchDateFilters(row, columnIndexes = getColumnIndexes()) {
+  const tibaDate = parseDateOnly(columnIndexes.tibaTanggal !== -1 ? row[columnIndexes.tibaTanggal] : null);
+  const berangkatDate = parseDateOnly(columnIndexes.berangkatTanggal !== -1 ? row[columnIndexes.berangkatTanggal] : null);
+  const tibaStart = document.getElementById(DATE_FIELD_IDS.tibaStart)?.value || '';
+  const tibaEnd = document.getElementById(DATE_FIELD_IDS.tibaEnd)?.value || '';
+  const berangkatStart = document.getElementById(DATE_FIELD_IDS.berangkatStart)?.value || '';
+  const berangkatEnd = document.getElementById(DATE_FIELD_IDS.berangkatEnd)?.value || '';
+
+  if (tibaStart && (!tibaDate || tibaDate < tibaStart)) return false;
+  if (tibaEnd && (!tibaDate || tibaDate > tibaEnd)) return false;
+  if (berangkatStart && (!berangkatDate || berangkatDate < berangkatStart)) return false;
+  if (berangkatEnd && (!berangkatDate || berangkatDate > berangkatEnd)) return false;
+  return true;
+}
+
+function doesRowMatchTonnageFilters(row, columnIndexes = getColumnIndexes()) {
+  const detailSummary = getRowDetailSummary(row, columnIndexes);
+  const bongkarMin = safeParseNumber(document.getElementById(TONNAGE_FIELD_IDS.bongkarMin)?.value);
+  const bongkarMax = safeParseNumber(document.getElementById(TONNAGE_FIELD_IDS.bongkarMax)?.value);
+  const muatMin = safeParseNumber(document.getElementById(TONNAGE_FIELD_IDS.muatMin)?.value);
+  const muatMax = safeParseNumber(document.getElementById(TONNAGE_FIELD_IDS.muatMax)?.value);
+
+  if (bongkarMin !== null && detailSummary.bongkarTon < bongkarMin) return false;
+  if (bongkarMax !== null && detailSummary.bongkarTon > bongkarMax) return false;
+  if (muatMin !== null && detailSummary.muatTon < muatMin) return false;
+  if (muatMax !== null && detailSummary.muatTon > muatMax) return false;
+  return true;
+}
+
+function countActiveFilters(isRouteFilterActive = false) {
+  const selectedCount = FILTER_TYPES.filter(filterType => selectedFilters[filterType].size > 0).length;
+  const searchCount = document.getElementById('searchInput')?.value?.trim() ? 1 : 0;
+  const routeCount = isRouteFilterActive ? 1 : 0;
+  const dateCount = Object.values(DATE_FILTER_GROUPS).filter(group =>
+    group.ids.some(id => document.getElementById(id)?.value)
+  ).length;
+  const tonnageCount = Object.values(TONNAGE_FILTER_GROUPS).filter(group =>
+    group.ids.some(id => document.getElementById(id)?.value)
+  ).length;
+  return selectedCount + searchCount + routeCount + dateCount + tonnageCount;
+}
+
+function closeAllFilterPanels() {
+  FILTER_TYPES.forEach(filterType => {
+    const panel = document.getElementById(getFilterDomId(filterType, 'Panel'));
+    const trigger = document.getElementById(getFilterDomId(filterType, 'Trigger'));
+    if (panel) {
+      panel.classList.add('hidden');
+    }
+    if (trigger) {
+      trigger.classList.remove('open');
+      trigger.setAttribute('aria-expanded', 'false');
+    }
+  });
+}
+
+function updateActiveFilterSummary(activeFilterCount) {
+  const summaryChip = document.getElementById('activeFilterSummary');
+  if (!summaryChip) return;
+
+  if (activeFilterCount > 0) {
+    summaryChip.textContent = `${activeFilterCount} filter aktif`;
+    summaryChip.classList.add('is-active');
+  } else {
+    summaryChip.textContent = 'Belum ada filter aktif';
+    summaryChip.classList.remove('is-active');
+  }
+}
+
+function updateClearFiltersButtonState(activeFilterCount) {
+  const clearBtn = document.getElementById('clearAllFiltersBtn');
+  if (clearBtn) {
+    clearBtn.disabled = activeFilterCount === 0;
+  }
+}
+
+function updateFilterPanelMeta(filterType, visibleCount = filterOptions[filterType]?.length || 0) {
+  const selectedStat = document.getElementById(getFilterDomId(filterType, 'SelectedStat'));
+  const visibleStat = document.getElementById(getFilterDomId(filterType, 'VisibleStat'));
+  const selectedCount = selectedFilters[filterType]?.size || 0;
+  const normalizedVisible = Number.isFinite(visibleCount) ? visibleCount : 0;
+
+  if (selectedStat) {
+    selectedStat.textContent = `${selectedCount} dipilih`;
+  }
+  if (visibleStat) {
+    visibleStat.textContent = `${normalizedVisible} opsi`;
+  }
+}
+
+function clearOptionFilter(filterType) {
+  if (!selectedFilters[filterType]) return;
+
+  selectedFilters[filterType].clear();
+  const searchInput = document.getElementById(getFilterDomId(filterType, 'Search'));
+  if (searchInput) {
+    searchInput.value = '';
+  }
+
+  populateExcelFilter(filterType, filterOptions[filterType], filterOptions[filterType].length);
+  updateFilterDisplay(filterType);
+}
+
+function clearDateGroup(groupKey) {
+  const group = DATE_FILTER_GROUPS[groupKey];
+  if (!group) return;
+  group.ids.forEach(id => {
+    const input = document.getElementById(id);
+    if (input) input.value = '';
+  });
+}
+
+function clearTonnageGroup(groupKey) {
+  const group = TONNAGE_FILTER_GROUPS[groupKey];
+  if (!group) return;
+  group.ids.forEach(id => {
+    const input = document.getElementById(id);
+    if (input) input.value = '';
+  });
+}
+
+function getRouteSelectionLabel() {
+  const selectElement = document.getElementById('routeSelect');
+  if (!selectElement || !selectElement.value) return '';
+  return selectElement.options[selectElement.selectedIndex]?.text || '';
+}
+
+function renderActiveFilterChips(isRouteFilterActive = false) {
+  const chipsContainer = document.getElementById('activeFilterChips');
+  if (!chipsContainer) return;
+
+  chipsContainer.innerHTML = '';
+  const chips = [];
+
+  const searchValue = document.getElementById('searchInput')?.value?.trim() || '';
+  if (searchValue) {
+    chips.push({
+      label: `Kata kunci: \"${truncateText(searchValue, 24)}\"`,
+      action: 'clear-search'
+    });
+  }
+
+  const routeLabel = getRouteSelectionLabel();
+  if (isRouteFilterActive && routeLabel) {
+    chips.push({
+      label: `Lintasan: ${truncateText(routeLabel, 28)}`,
+      action: 'clear-route'
+    });
+  }
+
+  FILTER_TYPES.forEach(filterType => {
+    const selected = Array.from(selectedFilters[filterType] || []);
+    if (selected.length === 0) return;
+
+    const preview = getDisplayValue(filterType, selected[0]);
+    const moreLabel = selected.length > 1 ? ` (+${selected.length - 1})` : '';
+    chips.push({
+      label: `${FILTER_META[filterType].activeLabel}: ${truncateText(preview, 24)}${moreLabel}`,
+      action: 'clear-option-filter',
+      filterType
+    });
+  });
+
+  Object.entries(DATE_FILTER_GROUPS).forEach(([groupKey, group]) => {
+    const [startId, endId] = group.ids;
+    const startValue = document.getElementById(startId)?.value || '';
+    const endValue = document.getElementById(endId)?.value || '';
+    const label = formatDateRangeChip(group.label, startValue, endValue);
+    if (!label) return;
+
+    chips.push({
+      label,
+      action: 'clear-date-group',
+      groupKey
+    });
+  });
+
+  Object.entries(TONNAGE_FILTER_GROUPS).forEach(([groupKey, group]) => {
+    const [minId, maxId] = group.ids;
+    const minValue = document.getElementById(minId)?.value || '';
+    const maxValue = document.getElementById(maxId)?.value || '';
+    const label = formatNumberRangeChip(group.label, minValue, maxValue);
+    if (!label) return;
+
+    chips.push({
+      label,
+      action: 'clear-tonnage-group',
+      groupKey
+    });
+  });
+
+  if (chips.length === 0) {
+    chipsContainer.classList.add('hidden');
+    return;
+  }
+
+  chips.forEach(chipDef => {
+    const chip = document.createElement('span');
+    chip.className = 'active-filter-chip';
+
+    const chipLabel = document.createElement('span');
+    chipLabel.textContent = chipDef.label;
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'chip-remove';
+    removeBtn.dataset.action = chipDef.action;
+    if (chipDef.filterType) {
+      removeBtn.dataset.filterType = chipDef.filterType;
+    }
+    if (chipDef.groupKey) {
+      removeBtn.dataset.groupKey = chipDef.groupKey;
+    }
+    removeBtn.setAttribute('aria-label', `Hapus ${chipDef.label}`);
+    removeBtn.textContent = 'x';
+
+    chip.appendChild(chipLabel);
+    chip.appendChild(removeBtn);
+    chipsContainer.appendChild(chip);
+  });
+
+  chipsContainer.classList.remove('hidden');
+}
+
+function handleActiveFilterChipClick(event) {
+  const removeBtn = event.target.closest('button[data-action]');
+  if (!removeBtn) return;
+
+  const action = removeBtn.dataset.action;
+  if (action === 'clear-search') {
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) searchInput.value = '';
+  } else if (action === 'clear-route') {
+    const routeSelect = document.getElementById('routeSelect');
+    if (routeSelect) routeSelect.selectedIndex = 0;
+  } else if (action === 'clear-option-filter') {
+    clearOptionFilter(removeBtn.dataset.filterType);
+  } else if (action === 'clear-date-group') {
+    clearDateGroup(removeBtn.dataset.groupKey);
+  } else if (action === 'clear-tonnage-group') {
+    clearTonnageGroup(removeBtn.dataset.groupKey);
+  } else {
+    return;
+  }
+
+  performSearch();
+}
+
 // Extract distinct values from loaded data
 function extractDistinctValues(dataSource = null) {
   const sourceData = dataSource || allData;
@@ -131,10 +536,7 @@ function extractDistinctValues(dataSource = null) {
 
   sourceData.forEach(row => {
     FILTER_TYPES.forEach(filterType => {
-      const columnIndex = columnIndexes[filterType];
-      if (columnIndex !== -1 && row[columnIndex]) {
-        distinctValues[filterType].add(String(row[columnIndex]).trim());
-      }
+      getRowFilterValues(filterType, row, columnIndexes).forEach(value => distinctValues[filterType].add(value));
     });
   });
 
@@ -155,10 +557,23 @@ function populateExcelFilter(filterType, values, totalCount = null) {
   const optionsContainer = document.getElementById(getFilterDomId(filterType, 'Options'));
   if (!optionsContainer) return;
 
+  const selectAllButton = document.getElementById(getFilterDomId(filterType, 'SelectAll'));
+  const clearAllButton = document.getElementById(getFilterDomId(filterType, 'ClearAll'));
+
   optionsContainer.innerHTML = '';
+  const labelCount = totalCount !== null ? totalCount : (filterOptions[filterType]?.length || 0);
+
+  if (selectAllButton) {
+    selectAllButton.disabled = values.length === 0;
+  }
+  if (clearAllButton) {
+    clearAllButton.disabled = values.length === 0 && selectedFilters[filterType].size === 0;
+  }
 
   if (values.length === 0) {
     optionsContainer.innerHTML = '<div class="no-results">Tidak ada data</div>';
+    updateFilterPanelMeta(filterType, 0);
+    updateFilterTotalCount(filterType, labelCount);
     return;
   }
 
@@ -169,7 +584,7 @@ function populateExcelFilter(filterType, values, totalCount = null) {
     checkbox.value = value;
     checkbox.dataset.filterType = filterType;
 
-    const displayValue = FILTER_META[filterType].isPort ? formatPortDisplay(value) : value;
+    const displayValue = getDisplayValue(filterType, value);
     const text = document.createTextNode(displayValue);
 
     checkbox.addEventListener('change', () => handleFilterChange(filterType));
@@ -184,15 +599,14 @@ function populateExcelFilter(filterType, values, totalCount = null) {
     optionsContainer.appendChild(label);
   });
 
-  // Update total count in filter label
-  if (totalCount !== null) {
-    updateFilterTotalCount(filterType, totalCount);
-  }
+  updateFilterPanelMeta(filterType, values.length);
+  updateFilterTotalCount(filterType, labelCount);
 }
 
 // Update filter total count display
 function updateFilterTotalCount(filterType, total) {
   const label = document.getElementById(getFilterDomId(filterType, 'Label'));
+  if (!label) return;
   const meta = FILTER_META[filterType];
   const hasSelection = selectedFilters[filterType].size > 0;
   label.textContent = `${hasSelection ? meta.activeLabel : meta.allLabel} (${total})`;
@@ -201,6 +615,7 @@ function updateFilterTotalCount(filterType, total) {
 // Handle filter change
 function handleFilterChange(filterType) {
   const optionsContainer = document.getElementById(getFilterDomId(filterType, 'Options'));
+  if (!optionsContainer) return;
   const checkboxes = optionsContainer.querySelectorAll('input[type="checkbox"]');
 
   selectedFilters[filterType].clear();
@@ -218,11 +633,13 @@ function handleFilterChange(filterType) {
 function updateFilterDisplay(filterType) {
   const badge = document.getElementById(getFilterDomId(filterType, 'Count'));
   const trigger = document.getElementById(getFilterDomId(filterType, 'Trigger'));
-  
+  if (!badge || !trigger) return;
+
   const count = selectedFilters[filterType].size;
   const totalOptions = filterOptions[filterType].length;
 
   updateFilterTotalCount(filterType, totalOptions);
+  updateFilterPanelMeta(filterType);
 
   if (count === 0) {
     badge.classList.add('hidden');
@@ -243,37 +660,67 @@ function setupFilterEventListeners() {
     const selectAll = document.getElementById(getFilterDomId(filterType, 'SelectAll'));
     const clearAll = document.getElementById(getFilterDomId(filterType, 'ClearAll'));
 
+    if (!trigger || !panel || !search || !selectAll || !clearAll) return;
+
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.setAttribute('aria-controls', panel.id);
+
+    if (!panel.querySelector('.dropdown-panel-header')) {
+      const panelHeader = document.createElement('div');
+      panelHeader.className = 'dropdown-panel-header';
+
+      const title = document.createElement('span');
+      title.className = 'panel-title';
+      title.textContent = FILTER_META[filterType].activeLabel;
+
+      const stat = document.createElement('span');
+      stat.className = 'panel-stat';
+
+      const selectedStat = document.createElement('span');
+      selectedStat.id = getFilterDomId(filterType, 'SelectedStat');
+      selectedStat.textContent = '0 dipilih';
+
+      const visibleStat = document.createElement('span');
+      visibleStat.id = getFilterDomId(filterType, 'VisibleStat');
+      visibleStat.textContent = '0 opsi';
+
+      stat.appendChild(selectedStat);
+      stat.appendChild(visibleStat);
+      panelHeader.appendChild(title);
+      panelHeader.appendChild(stat);
+      panel.insertBefore(panelHeader, search);
+    }
+
     // Toggle dropdown
     trigger.addEventListener('click', (e) => {
       e.stopPropagation();
       const isOpen = !panel.classList.contains('hidden');
 
-      // Close all other panels
-      document.querySelectorAll('.dropdown-panel').forEach(p => p.classList.add('hidden'));
+      closeAllFilterPanels();
 
       if (!isOpen) {
         panel.classList.remove('hidden');
+        trigger.classList.add('open');
+        trigger.setAttribute('aria-expanded', 'true');
+        search.focus({ preventScroll: true });
       }
     });
 
     // Search within options
     search.addEventListener('input', (e) => {
       const searchTerm = e.target.value.toLowerCase();
-      // Use current filterOptions (already filtered dynamically)
       const filtered = filterOptions[filterType].filter(value => {
-        const displayValue = FILTER_META[filterType].isPort ? formatPortDisplay(value) : value;
+        const displayValue = getDisplayValue(filterType, value);
         return displayValue.toLowerCase().includes(searchTerm);
       });
       populateExcelFilter(filterType, filtered, filterOptions[filterType].length);
+    });
 
-      // Re-check selected items
-      const optionsContainer = document.getElementById(getFilterDomId(filterType, 'Options'));
-      const checkboxes = optionsContainer.querySelectorAll('input[type="checkbox"]');
-      checkboxes.forEach(cb => {
-        if (selectedFilters[filterType].has(cb.value)) {
-          cb.checked = true;
-        }
-      });
+    search.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        closeAllFilterPanels();
+        trigger.focus();
+      }
     });
 
     // Select all
@@ -291,21 +738,41 @@ function setupFilterEventListeners() {
       checkboxes.forEach(cb => cb.checked = false);
       handleFilterChange(filterType);
     });
+
+    updateFilterPanelMeta(filterType, filterOptions[filterType]?.length || 0);
   });
 
   // Close dropdowns when clicking outside
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.excel-filter-wrapper')) {
-      document.querySelectorAll('.dropdown-panel').forEach(p => p.classList.add('hidden'));
+      closeAllFilterPanels();
     }
   });
 
   // Close dropdowns on ESC key
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-      document.querySelectorAll('.dropdown-panel').forEach(p => p.classList.add('hidden'));
+      closeAllFilterPanels();
     }
   });
+
+  [...Object.values(DATE_FIELD_IDS), ...Object.values(TONNAGE_FIELD_IDS)].forEach(id => {
+    const input = document.getElementById(id);
+    if (input) {
+      input.addEventListener('change', performSearch);
+      input.addEventListener('input', performSearch);
+    }
+  });
+
+  const chipsContainer = document.getElementById('activeFilterChips');
+  if (chipsContainer) {
+    chipsContainer.addEventListener('click', handleActiveFilterChipClick);
+  }
+
+  const clearAllFiltersBtn = document.getElementById('clearAllFiltersBtn');
+  if (clearAllFiltersBtn) {
+    clearAllFiltersBtn.addEventListener('click', resetSearch);
+  }
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
@@ -459,7 +926,7 @@ async function autoLoadDatabase() {
     document.getElementById('controls').classList.remove('hidden');
     document.getElementById('advanced-filters').classList.remove('hidden');
     extractDistinctValues();
-    performSearch();
+    resetSearch();
 
   } catch (err) {
     showError(`Gagal memuat data: <br>${err.message}`);
@@ -477,6 +944,8 @@ document.getElementById('yearSelect').addEventListener('change', (e) => {
 document.getElementById('searchBtn').addEventListener('click', performSearch);
 document.getElementById('resetBtn').addEventListener('click', resetSearch);
 document.getElementById('routeSelect').addEventListener('change', performSearch);
+const debouncedSearch = debounce(() => performSearch(), 280);
+document.getElementById('searchInput').addEventListener('input', debouncedSearch);
 document.getElementById('rowsPerPage').addEventListener('change', (e) => {
   rowsPerPage = parseInt(e.target.value);
   currentPage = 1;
@@ -563,6 +1032,7 @@ function renderHeader(columns) {
 function performSearch() {
   const textInput = document.getElementById('searchInput').value.toUpperCase();
   const routeInput = document.getElementById('routeSelect').value;
+  const columnIndexes = getColumnIndexes();
 
   const summaryDiv = document.getElementById('summary-stats');
   const tableWrapper = document.getElementById('table-wrapper');
@@ -572,8 +1042,7 @@ function performSearch() {
     summaryDiv.classList.add('hidden');
   } else {
     summaryDiv.classList.remove('hidden');
-    const selectElement = document.getElementById('routeSelect');
-    const selectedText = selectElement.options[selectElement.selectedIndex].text;
+    const selectedText = getRouteSelectionLabel();
     document.getElementById('summary-route-name').textContent = selectedText;
 
     const yearMatch = currentDbUrl.match(/(\d{4})/);
@@ -590,54 +1059,29 @@ function performSearch() {
     if (parts.length === 2) {
       routeDestCode = parts[0];
       routeOriginCode = parts[1];
-      const idxInaport = dbColumns.indexOf("INAPORT CODE");
-      const idxTibaDari = dbColumns.indexOf("TIBA DARI CODE");
+      const idxInaport = columnIndexes.inaportCode;
+      const idxTibaDari = columnIndexes.tibaDariCode;
       if (idxInaport !== -1 && idxTibaDari !== -1) {
         isRouteFilterActive = true;
       }
     }
   }
 
-  const columnIndexes = getColumnIndexes();
-
   filteredData = allData.filter(row => {
     const matchesText = textInput === "" || row.some(cell => String(cell).toUpperCase().includes(textInput));
     
     let matchesRoute = true;
     if (isRouteFilterActive) {
-      const idxInaport = dbColumns.indexOf("INAPORT CODE");
-      const idxTibaDari = dbColumns.indexOf("TIBA DARI CODE");
-      const cellInaport = String(row[idxInaport] || "").toUpperCase();
-      const cellOrigin = String(row[idxTibaDari] || "").toUpperCase();
+      const cellInaport = String(row[columnIndexes.inaportCode] || "").toUpperCase();
+      const cellOrigin = String(row[columnIndexes.tibaDariCode] || "").toUpperCase();
       matchesRoute = (cellInaport === routeDestCode) && (cellOrigin === routeOriginCode);
     }
 
-    // Excel-like filters (AND logic)
-    let matchesKapal = true;
-        if (selectedFilters.kapal.size > 0 && columnIndexes.kapal !== -1) {
-          const kapalValue = String(row[columnIndexes.kapal] || "").trim();
-          matchesKapal = selectedFilters.kapal.has(kapalValue);
-        }
+    const matchesOptionFilters = FILTER_TYPES.every(filterType => doesRowMatchOptionFilter(filterType, row, columnIndexes));
+    const matchesDateFilters = doesRowMatchDateFilters(row, columnIndexes);
+    const matchesTonnageFilters = doesRowMatchTonnageFilters(row, columnIndexes);
 
-        let matchesBerangkatKe = true;
-        if (selectedFilters.berangkatKe.size > 0 && columnIndexes.berangkatKe !== -1) {
-          const berangkatKeValue = String(row[columnIndexes.berangkatKe] || "").trim();
-          matchesBerangkatKe = selectedFilters.berangkatKe.has(berangkatKeValue);
-        }
-
-        let matchesTibaDari = true;
-        if (selectedFilters.tibaDari.size > 0 && columnIndexes.tibaDari !== -1) {
-          const tibaDariValue = String(row[columnIndexes.tibaDari] || "").trim();
-          matchesTibaDari = selectedFilters.tibaDari.has(tibaDariValue);
-        }
-
-        let matchesJenisKapal = true;
-        if (selectedFilters.jenisKapal.size > 0 && columnIndexes.jenisKapal !== -1) {
-          const jenisKapalValue = String(row[columnIndexes.jenisKapal] || "").trim();
-          matchesJenisKapal = selectedFilters.jenisKapal.has(jenisKapalValue);
-        }
-
-    return matchesText && matchesRoute && matchesKapal && matchesBerangkatKe && matchesTibaDari && matchesJenisKapal;
+    return matchesText && matchesRoute && matchesOptionFilters && matchesDateFilters && matchesTonnageFilters;
   });
 
   // Calculate statistics from filtered data
@@ -655,15 +1099,26 @@ function performSearch() {
   if (tableCountEl) tableCountEl.innerText = filteredData.length;
   const exportBtn = document.getElementById('exportBtn');
   const exportTooltip = document.getElementById('exportTooltip');
-  // Export aktif jika ada data hasil filter (search atau lintasan atau excel filters)
-      const hasFilter = textInput.trim() !== '' || isRouteFilterActive || FILTER_TYPES.some(filterType => selectedFilters[filterType].size > 0);
+  const activeFilterCount = countActiveFilters(isRouteFilterActive);
+  const hasFilter = activeFilterCount > 0;
   const isDisabled = !hasFilter || filteredData.length === 0;
   if (exportBtn) {
     exportBtn.disabled = isDisabled;
   }
   if (exportTooltip) {
+    if (!hasFilter) {
+      exportTooltip.textContent = 'Terapkan minimal satu filter sebelum ekspor';
+    } else if (filteredData.length === 0) {
+      exportTooltip.textContent = 'Tidak ada data yang cocok untuk diekspor';
+    } else {
+      exportTooltip.textContent = 'Ekspor hasil filter ke XLSX';
+    }
     exportTooltip.style.display = isDisabled ? 'block' : 'none';
   }
+
+  updateActiveFilterSummary(activeFilterCount);
+  updateClearFiltersButtonState(activeFilterCount);
+  renderActiveFilterChips(isRouteFilterActive);
 
   if (filteredData.length > 0) {
     tableWrapper.classList.remove('hidden');
@@ -687,6 +1142,7 @@ function performSearch() {
 function updateDynamicFilterOptions() {
   const textInput = document.getElementById('searchInput').value.toUpperCase();
   const routeInput = document.getElementById('routeSelect').value;
+  const columnIndexes = getColumnIndexes();
 
   // Build base filtered data (text + route, no excel filters)
   let baseFilteredData = allData;
@@ -704,79 +1160,40 @@ function updateDynamicFilterOptions() {
     if (parts.length === 2) {
       const routeDestCode = parts[0];
       const routeOriginCode = parts[1];
-      const idxInaport = dbColumns.indexOf("INAPORT CODE");
-      const idxTibaDari = dbColumns.indexOf("TIBA DARI CODE");
       
       baseFilteredData = baseFilteredData.filter(row => {
-        const cellInaport = String(row[idxInaport] || "").toUpperCase();
-        const cellOrigin = String(row[idxTibaDari] || "").toUpperCase();
+        const cellInaport = String(row[columnIndexes.inaportCode] || "").toUpperCase();
+        const cellOrigin = String(row[columnIndexes.tibaDariCode] || "").toUpperCase();
         return (cellInaport === routeDestCode) && (cellOrigin === routeOriginCode);
       });
     }
   }
 
   // Now update each filter's options based on the OTHER filters (not itself)
-      FILTER_TYPES.forEach(filterType => updateFilterOptionsForType(filterType, baseFilteredData));
-    }
+  FILTER_TYPES.forEach(filterType => updateFilterOptionsForType(filterType, baseFilteredData, columnIndexes));
+}
 
-    // Update options for a specific filter type
-    function updateFilterOptionsForType(filterType, baseData) {
-      const columnIndexes = getColumnIndexes();
+function updateFilterOptionsForType(filterType, baseData, columnIndexes = getColumnIndexes()) {
+  const dataForThisFilter = baseData.filter(row => {
+    const matchesOtherFilters = FILTER_TYPES.every(otherFilterType => {
+      if (otherFilterType === filterType) return true;
+      return doesRowMatchOptionFilter(otherFilterType, row, columnIndexes);
+    });
 
-      // Apply OTHER excel filters (not the current one)
-      let dataForThisFilter = baseData.filter(row => {
-        let matches = true;
-
-        // Apply kapal filter (only if we're NOT updating kapal filter)
-        if (filterType !== 'kapal' && selectedFilters.kapal.size > 0 && columnIndexes.kapal !== -1) {
-          const kapalValue = String(row[columnIndexes.kapal] || "").trim();
-          matches = matches && selectedFilters.kapal.has(kapalValue);
-        }
-
-        // Apply berangkatKe filter (only if we're NOT updating berangkatKe filter)
-        if (filterType !== 'berangkatKe' && selectedFilters.berangkatKe.size > 0 && columnIndexes.berangkatKe !== -1) {
-          const berangkatKeValue = String(row[columnIndexes.berangkatKe] || "").trim();
-          matches = matches && selectedFilters.berangkatKe.has(berangkatKeValue);
-        }
-
-        // Apply tibaDari filter (only if we're NOT updating tibaDari filter)
-        if (filterType !== 'tibaDari' && selectedFilters.tibaDari.size > 0 && columnIndexes.tibaDari !== -1) {
-          const tibaDariValue = String(row[columnIndexes.tibaDari] || "").trim();
-          matches = matches && selectedFilters.tibaDari.has(tibaDariValue);
-        }
-
-        // Apply jenisKapal filter (only if we're NOT updating jenisKapal filter)
-        if (filterType !== 'jenisKapal' && selectedFilters.jenisKapal.size > 0 && columnIndexes.jenisKapal !== -1) {
-          const jenisKapalValue = String(row[columnIndexes.jenisKapal] || "").trim();
-          matches = matches && selectedFilters.jenisKapal.has(jenisKapalValue);
-        }
-
-    return matches;
+    return matchesOtherFilters
+      && doesRowMatchDateFilters(row, columnIndexes)
+      && doesRowMatchTonnageFilters(row, columnIndexes);
   });
 
-  // Extract distinct values for this filter type
   const valueSet = new Set();
-      const colIdx = columnIndexes[filterType];
+  dataForThisFilter.forEach(row => {
+    getRowFilterValues(filterType, row, columnIndexes).forEach(value => valueSet.add(value));
+  });
 
-  if (colIdx !== -1) {
-    dataForThisFilter.forEach(row => {
-      if (row[colIdx]) {
-        valueSet.add(String(row[colIdx]).trim());
-      }
-    });
-  }
-
-  // Update filter options
-  const newOptions = Array.from(valueSet).sort();
+  const newOptions = Array.from(valueSet).sort((a, b) => a.localeCompare(b, 'id'));
   filterOptions[filterType] = newOptions;
-
-  // Store for search functionality
   allFilterOptions[filterType] = [...newOptions];
-
-  // Re-populate the dropdown
   populateExcelFilter(filterType, newOptions, newOptions.length);
-  
-  // Update display to show new total
   updateFilterDisplay(filterType);
 }
 
@@ -1155,12 +1572,23 @@ function calculateAndRenderSummary() {
 }
 
 function resetSearch() {
+  closeAllFilterPanels();
   document.getElementById('searchInput').value = '';
   document.getElementById('routeSelect').selectedIndex = 0;
 
   FILTER_TYPES.forEach(filterType => {
     selectedFilters[filterType].clear();
     document.getElementById(getFilterDomId(filterType, 'Search')).value = '';
+  });
+
+  Object.values(DATE_FIELD_IDS).forEach(id => {
+    const input = document.getElementById(id);
+    if (input) input.value = '';
+  });
+
+  Object.values(TONNAGE_FIELD_IDS).forEach(id => {
+    const input = document.getElementById(id);
+    if (input) input.value = '';
   });
 
   // Uncheck all checkboxes
@@ -1247,4 +1675,5 @@ function showError(msg) {
   el.innerHTML = `<strong>Error:</strong> ${msg}`;
   el.classList.remove('hidden');
 }
-function hideError() { document.getElementById('error').classList.add('hidden'); }
+function hideError() { document.getElementById('error').classList.add('hidden'); }
+
