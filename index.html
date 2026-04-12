@@ -288,6 +288,13 @@
       font-size: 13px;
     }
 
+    .options-list .meta-results {
+      padding: 10px 12px;
+      color: #64748b;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
     .options-list::-webkit-scrollbar {
       width: 8px;
     }
@@ -565,6 +572,10 @@
       </div>
 
       <div class="mt-4 md:mt-0 flex flex-col sm:flex-row gap-4 items-center">
+        <a href="./dashboard-komoditi.html"
+          class="inline-flex items-center justify-center px-4 py-2.5 rounded-lg border border-blue-200 bg-white text-blue-800 text-sm font-semibold hover:bg-blue-50 transition-colors shadow-sm">
+          Dashboard Komoditi Tahunan
+        </a>
         <div class="relative group">
           <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <svg class="h-4 w-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -624,12 +635,12 @@
           <select id="routeSelect" class="filter-select bg-white">
             <option value="">Semua Lintasan</option>
           </select>
-          <button type="button" id="searchBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2">
-            Terapkan
-          </button>
-          <button type="button" id="resetBtn" class="bg-white hover:bg-slate-50 text-gray-700 border border-gray-300 font-medium py-3 px-4 rounded-xl transition-colors shadow-sm">
-            Reset
-          </button>
+        <button type="button" id="searchBtn" class="hidden bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2">
+          Terapkan
+        </button>
+        <button type="button" id="resetBtn" class="hidden bg-white hover:bg-slate-50 text-gray-700 border border-gray-300 font-medium py-3 px-4 rounded-xl transition-colors shadow-sm">
+          Reset
+        </button>
           <div id="exportBtnWrapper" class="tooltip-wrapper">
             <button id="exportBtn"
               class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-3 px-4 rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"

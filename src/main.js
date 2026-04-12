@@ -53,6 +53,7 @@ const FILTER_META = {
   muatanMuat: { suffix: 'MuatanMuat', allLabel: 'Semua Muatan Berangkat', activeLabel: 'Muatan Berangkat', source: 'detailCommodity', direction: 'MUAT' }
 };
 const FILTER_TYPES = Object.keys(FILTER_META);
+const MAX_FILTER_OPTION_RENDER = 250;
 const DETAIL_EXPORT_COLUMNS = ['BONGKAR_KOMODITI', 'BONGKAR_JENIS', 'BONGKAR_TON', 'BONGKAR_M3', 'BONGKAR_UNIT', 'MUAT_KOMODITI', 'MUAT_JENIS', 'MUAT_TON', 'MUAT_M3', 'MUAT_UNIT'];
 const DATE_FIELD_IDS = {
   tibaStart: 'tanggalTibaStart',
@@ -562,22 +563,32 @@ function populateExcelFilter(filterType, values, totalCount = null) {
 
   optionsContainer.innerHTML = '';
   const labelCount = totalCount !== null ? totalCount : (filterOptions[filterType]?.length || 0);
+  const matchedCount = values.length;
+  const renderValues = values.slice(0, MAX_FILTER_OPTION_RENDER);
+  const isTruncated = matchedCount > MAX_FILTER_OPTION_RENDER;
 
   if (selectAllButton) {
-    selectAllButton.disabled = values.length === 0;
+    selectAllButton.disabled = matchedCount === 0;
   }
   if (clearAllButton) {
-    clearAllButton.disabled = values.length === 0 && selectedFilters[filterType].size === 0;
+    clearAllButton.disabled = matchedCount === 0 && selectedFilters[filterType].size === 0;
   }
 
-  if (values.length === 0) {
+  if (matchedCount === 0) {
     optionsContainer.innerHTML = '<div class="no-results">Tidak ada data</div>';
     updateFilterPanelMeta(filterType, 0);
     updateFilterTotalCount(filterType, labelCount);
     return;
   }
 
-  values.forEach(value => {
+  if (isTruncated) {
+    const meta = document.createElement('div');
+    meta.className = 'meta-results';
+    meta.textContent = `Menampilkan ${renderValues.length} dari ${matchedCount} hasil. Ketik kata kunci untuk mempersempit.`;
+    optionsContainer.appendChild(meta);
+  }
+
+  renderValues.forEach(value => {
     const label = document.createElement('label');
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
@@ -599,7 +610,7 @@ function populateExcelFilter(filterType, values, totalCount = null) {
     optionsContainer.appendChild(label);
   });
 
-  updateFilterPanelMeta(filterType, values.length);
+  updateFilterPanelMeta(filterType, matchedCount);
   updateFilterTotalCount(filterType, labelCount);
 }
 
@@ -725,18 +736,45 @@ function setupFilterEventListeners() {
 
     // Select all
     selectAll.addEventListener('click', () => {
-      const optionsContainer = document.getElementById(getFilterDomId(filterType, 'Options'));
-      const checkboxes = optionsContainer.querySelectorAll('input[type="checkbox"]');
-      checkboxes.forEach(cb => cb.checked = true);
-      handleFilterChange(filterType);
+      const searchTerm = (search.value || '').toLowerCase();
+      if (!searchTerm) {
+        // Empty state means no explicit selection: all options are included.
+        selectedFilters[filterType].clear();
+      } else {
+        const matchedValues = filterOptions[filterType].filter(value => {
+          const displayValue = getDisplayValue(filterType, value);
+          return displayValue.toLowerCase().includes(searchTerm);
+        });
+        matchedValues.forEach(value => selectedFilters[filterType].add(value));
+      }
+
+      const filtered = searchTerm
+        ? filterOptions[filterType].filter(value => getDisplayValue(filterType, value).toLowerCase().includes(searchTerm))
+        : filterOptions[filterType];
+      populateExcelFilter(filterType, filtered, filterOptions[filterType].length);
+      updateFilterDisplay(filterType);
+      performSearch();
     });
 
     // Clear all
     clearAll.addEventListener('click', () => {
-      const optionsContainer = document.getElementById(getFilterDomId(filterType, 'Options'));
-      const checkboxes = optionsContainer.querySelectorAll('input[type="checkbox"]');
-      checkboxes.forEach(cb => cb.checked = false);
-      handleFilterChange(filterType);
+      const searchTerm = (search.value || '').toLowerCase();
+      if (!searchTerm) {
+        selectedFilters[filterType].clear();
+      } else {
+        const matchedValues = filterOptions[filterType].filter(value => {
+          const displayValue = getDisplayValue(filterType, value);
+          return displayValue.toLowerCase().includes(searchTerm);
+        });
+        matchedValues.forEach(value => selectedFilters[filterType].delete(value));
+      }
+
+      const filtered = searchTerm
+        ? filterOptions[filterType].filter(value => getDisplayValue(filterType, value).toLowerCase().includes(searchTerm))
+        : filterOptions[filterType];
+      populateExcelFilter(filterType, filtered, filterOptions[filterType].length);
+      updateFilterDisplay(filterType);
+      performSearch();
     });
 
     updateFilterPanelMeta(filterType, filterOptions[filterType]?.length || 0);
@@ -1038,17 +1076,15 @@ function performSearch() {
   const tableWrapper = document.getElementById('table-wrapper');
   const emptyState = document.getElementById('empty-state');
 
-  if (!routeInput || routeInput === "") {
-    summaryDiv.classList.add('hidden');
-  } else {
-    summaryDiv.classList.remove('hidden');
-    const selectedText = getRouteSelectionLabel();
-    document.getElementById('summary-route-name').textContent = selectedText;
+  summaryDiv.classList.remove('hidden');
+  const selectedText = getRouteSelectionLabel() || 'Semua Lintasan';
+  const routeNameElement = document.getElementById('summary-route-name');
+  if (routeNameElement) routeNameElement.textContent = selectedText;
 
-    const yearMatch = currentDbUrl.match(/(\d{4})/);
-    const selectedYear = yearMatch ? yearMatch[0] : "";
-    document.getElementById('stats-year-display').textContent = selectedYear;
-  }
+  const yearMatch = currentDbUrl.match(/(\d{4})/);
+  const selectedYear = yearMatch ? yearMatch[0] : '';
+  const statsYearElement = document.getElementById('stats-year-display');
+  if (statsYearElement) statsYearElement.textContent = selectedYear;
 
   let routeDestCode = "";
   let routeOriginCode = "";
