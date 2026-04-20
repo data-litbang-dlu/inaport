@@ -161,6 +161,12 @@ function formatNumber(value, fractionDigits = 2) {
   });
 }
 
+function appendItems(target, source) {
+  for (let i = 0; i < source.length; i++) {
+    target.push(source[i]);
+  }
+}
+
 function truncateText(text, maxLength = 24) {
   const value = String(text || '').trim();
   if (value.length <= maxLength) return value;
@@ -1436,7 +1442,7 @@ async function loadAllTrips(files) {
     showStatus(`Memuat ${fileInfo.name} (${i + 1}/${files.length})...`);
 
     const fileTrips = await extractTripsFromFile(fileInfo);
-    loadedTrips.push(...fileTrips);
+    appendItems(loadedTrips, fileTrips);
   }
 
   return loadedTrips;
