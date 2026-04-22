@@ -632,7 +632,7 @@
         <p class="filter-hint">Ketik di pencarian atau pilih beberapa nilai filter, lalu hapus cepat lewat chip aktif.</p>
         <div class="search-group mb-4">
           <input type="text" id="searchInput" placeholder="Cari nama kapal, perusahaan, nomor PKK, atau kata kunci lain" class="search-field" autocomplete="off">
-          <select id="routeSelect" class="filter-select bg-white">
+          <select id="routeSelect" class="filter-select bg-white hidden">
             <option value="">Semua Lintasan</option>
           </select>
         <button type="button" id="searchBtn" class="hidden bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2">
@@ -657,27 +657,27 @@
 
         <div class="filter-section-title">Filter Kategori</div>
         <div class="filter-grid">
-        <!-- Filter Kapal -->
+
         <div class="excel-filter-wrapper relative">
-          <button type="button" id="filterKapalTrigger" class="filter-trigger">
-            <span id="filterKapalLabel">Semua Kapal</span>
-            <span id="filterKapalCount" class="count-badge hidden">0</span>
+          <button type="button" id="filterPelabuhanTrigger" class="filter-trigger">
+            <span id="filterPelabuhanLabel">Semua Pelabuhan</span>
+            <span id="filterPelabuhanCount" class="count-badge hidden">0</span>
             <svg class="w-4 h-4 ml-1" fill="currentColor" viewBox="0 0 20 20">
               <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
             </svg>
           </button>
-          <div id="filterKapalPanel" class="dropdown-panel hidden">
-            <input type="text" id="filterKapalSearch" class="filter-search" placeholder="Cari kapal..." autocomplete="off">
+          <div id="filterPelabuhanPanel" class="dropdown-panel hidden">
+            <input type="text" id="filterPelabuhanSearch" class="filter-search" placeholder="Cari pelabuhan..." autocomplete="off">
             <div class="filter-actions">
-              <button type="button" id="filterKapalSelectAll" class="action-btn">Select All</button>
-              <button type="button" id="filterKapalClearAll" class="action-btn">Clear All</button>
+              <button type="button" id="filterPelabuhanSelectAll" class="action-btn">Select All</button>
+              <button type="button" id="filterPelabuhanClearAll" class="action-btn">Clear All</button>
             </div>
-            <div id="filterKapalOptions" class="options-list"></div>
+            <div id="filterPelabuhanOptions" class="options-list"></div>
           </div>
         </div>
 
         <!-- Filter Berangkat Ke -->
-        <div class="excel-filter-wrapper relative">
+        <div class="excel-filter-wrapper relative hidden">
           <button type="button" id="filterBerangkatKeTrigger" class="filter-trigger">
             <span id="filterBerangkatKeLabel">Semua Keberangkatan</span>
             <span id="filterBerangkatKeCount" class="count-badge hidden">0</span>
@@ -698,7 +698,7 @@
         <!-- Filter Tiba Dari -->
         <div class="excel-filter-wrapper relative">
           <button type="button" id="filterTibaDariTrigger" class="filter-trigger">
-            <span id="filterTibaDariLabel">Semua Kedatangan</span>
+            <span id="filterTibaDariLabel">Semua Tiba Dari</span>
             <span id="filterTibaDariCount" class="count-badge hidden">0</span>
             <svg class="w-4 h-4 ml-1" fill="currentColor" viewBox="0 0 20 20">
               <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
@@ -733,21 +733,22 @@
           </div>
         </div>
 
+        <!-- Filter Kapal -->
         <div class="excel-filter-wrapper relative">
-          <button type="button" id="filterPelabuhanTrigger" class="filter-trigger">
-            <span id="filterPelabuhanLabel">Semua Pelabuhan</span>
-            <span id="filterPelabuhanCount" class="count-badge hidden">0</span>
+          <button type="button" id="filterKapalTrigger" class="filter-trigger">
+            <span id="filterKapalLabel">Semua Kapal</span>
+            <span id="filterKapalCount" class="count-badge hidden">0</span>
             <svg class="w-4 h-4 ml-1" fill="currentColor" viewBox="0 0 20 20">
               <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
             </svg>
           </button>
-          <div id="filterPelabuhanPanel" class="dropdown-panel hidden">
-            <input type="text" id="filterPelabuhanSearch" class="filter-search" placeholder="Cari pelabuhan..." autocomplete="off">
+          <div id="filterKapalPanel" class="dropdown-panel hidden">
+            <input type="text" id="filterKapalSearch" class="filter-search" placeholder="Cari kapal..." autocomplete="off">
             <div class="filter-actions">
-              <button type="button" id="filterPelabuhanSelectAll" class="action-btn">Select All</button>
-              <button type="button" id="filterPelabuhanClearAll" class="action-btn">Clear All</button>
+              <button type="button" id="filterKapalSelectAll" class="action-btn">Select All</button>
+              <button type="button" id="filterKapalClearAll" class="action-btn">Clear All</button>
             </div>
-            <div id="filterPelabuhanOptions" class="options-list"></div>
+            <div id="filterKapalOptions" class="options-list"></div>
           </div>
         </div>
 
@@ -836,7 +837,7 @@
           </div>
         </div>
 
-        <div class="range-card">
+        <div class="range-card hidden">
           <div class="text-sm font-bold text-slate-800 mb-3">Jumlah Muatan Kedatangan (Ton)</div>
           <div class="range-row">
             <div>
@@ -850,7 +851,7 @@
           </div>
         </div>
 
-        <div class="range-card">
+        <div class="range-card hidden">
           <div class="text-sm font-bold text-slate-800 mb-3">Jumlah Muatan Keberangkatan (Ton)</div>
           <div class="range-row">
             <div>

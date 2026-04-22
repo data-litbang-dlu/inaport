@@ -40,8 +40,8 @@ const FILTER_META = {
   },
   tibaDari: {
     suffix: 'TibaDari',
-    allLabel: 'Semua Kedatangan',
-    activeLabel: 'Pelabuhan Kedatangan'
+    allLabel: 'Semua Tiba dari',
+    activeLabel: 'Pelabuhan Tiba dari'
   },
   trayek: {
     suffix: 'Trayek',

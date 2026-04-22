@@ -46,7 +46,7 @@ const FILTER_META = {
   kapal: { suffix: 'Kapal', allLabel: 'Semua Kapal', activeLabel: 'Kapal', source: 'column', column: 'KAPAL' },
   pelabuhan: { suffix: 'Pelabuhan', allLabel: 'Semua Pelabuhan', activeLabel: 'Pelabuhan', source: 'column', column: 'INAPORT CODE', isPort: true },
   berangkatKe: { suffix: 'BerangkatKe', allLabel: 'Semua Keberangkatan', activeLabel: 'Keberangkatan', source: 'column', column: 'BERANGKAT KE' },
-  tibaDari: { suffix: 'TibaDari', allLabel: 'Semua Kedatangan', activeLabel: 'Kedatangan', source: 'column', column: 'TIBA DARI' },
+  tibaDari: { suffix: 'TibaDari', allLabel: 'Semua Tiba Dari', activeLabel: 'Kedatangan', source: 'column', column: 'TIBA DARI' },
   jenisKapal: { suffix: 'JenisKapal', allLabel: 'Semua Jenis Kapal', activeLabel: 'Jenis Kapal', source: 'column', column: 'JENIS KAPAL' },
   trayek: { suffix: 'Trayek', allLabel: 'Semua Trayek', activeLabel: 'Trayek', source: 'column', column: 'TRAYEK' },
   muatanBongkar: { suffix: 'MuatanBongkar', allLabel: 'Semua Muatan Datang', activeLabel: 'Muatan Datang', source: 'detailCommodity', direction: 'BONGKAR' },
