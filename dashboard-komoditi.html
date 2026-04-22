@@ -519,7 +519,7 @@
               <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"></path>
             </svg>
           </button>
-          <div id="filterBerangkatKePanel" class="dropdown-panel hidden">
+          <div id="filterBerangkatKePanel" class="dropdown-panel">
             <input type="text" id="filterBerangkatKeSearch" class="filter-search" placeholder="Cari pelabuhan berangkat..." autocomplete="off">
             <div class="filter-actions">
               <button type="button" id="filterBerangkatKeSelectAll" class="action-btn">Select All</button>
@@ -666,7 +666,7 @@
       </div> -->
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3 mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 mb-6">
       <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
         <p class="text-xs uppercase tracking-wider font-semibold text-slate-500">Database Terdeteksi</p>
         <p id="summaryDbCount" class="text-2xl font-bold text-slate-800 mt-1">0</p>
@@ -678,10 +678,6 @@
       <div class="bg-white border border-green-200 rounded-xl p-4 shadow-sm bg-green-50">
         <p class="text-xs uppercase tracking-wider font-semibold text-green-700">Total Tonase (Filter Aktif)</p>
         <p id="summaryTotalTon" class="text-2xl font-bold text-green-800 mt-1">0</p>
-      </div>
-      <div class="bg-white border border-blue-200 rounded-xl p-4 shadow-sm bg-blue-50">
-        <p class="text-xs uppercase tracking-wider font-semibold text-blue-700">Total Unit (Filter Aktif)</p>
-        <p id="summaryTotalUnit" class="text-2xl font-bold text-blue-800 mt-1">0</p>
       </div>
       <div class="bg-white border border-amber-200 rounded-xl p-4 shadow-sm bg-amber-50">
         <p class="text-xs uppercase tracking-wider font-semibold text-amber-700">Akumulasi Trip</p>
@@ -705,7 +701,7 @@
       </div>
     </div>
 
-    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 mb-6">
+    <!-- <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 mb-6">
       <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-3">
         <div>
           <h2 class="text-lg font-bold text-slate-800">Grafik Garis Tren Antar Tahun</h2>
@@ -718,7 +714,7 @@
           Tidak ada data yang cocok dengan filter.
         </div>
       </div>
-    </div>
+    </div> -->
 
     <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 mb-6">
       <div class="flex items-center justify-between mb-3">
@@ -732,10 +728,10 @@
               <th class="px-4 py-3 text-left">Tahun</th>
               <th class="px-4 py-3 text-right">Trip</th>
               <th class="px-4 py-3 text-right">Tonase</th>
-              <th class="px-4 py-3 text-right">Unit</th>
+              <!-- <th class="px-4 py-3 text-right">Unit</th>
               <th class="px-4 py-3 text-right">Komoditi Unik</th>
               <th class="px-4 py-3 text-left">Komoditi Teratas</th>
-              <th class="px-4 py-3 text-right">Nilai Teratas</th>
+              <th class="px-4 py-3 text-right">Nilai Teratas</th> -->
             </tr>
           </thead>
           <tbody id="yearlyTableBody" class="divide-y divide-slate-200"></tbody>
@@ -749,12 +745,11 @@
         <span id="shipTripMeta" class="text-xs font-semibold text-slate-600 bg-slate-100 border border-slate-200 rounded-full px-3 py-1.5">0 kapal</span>
       </div>
       <div class="table-scroll overflow-auto">
-        <table class="w-full text-sm border-collapse min-w-[720px]">
+        <table id="shipTripTable" class="w-full text-sm border-collapse min-w-[720px]">
           <thead class="bg-slate-800 text-white text-xs uppercase tracking-wider">
-            <tr>
+            <tr id="shipTripHeaderRow">
               <th class="px-4 py-3 text-left">Nama Kapal</th>
               <th class="px-4 py-3 text-right">Total Trip</th>
-              <th class="px-4 py-3 text-left">Tahun Aktif (Hasil Filter)</th>
             </tr>
           </thead>
           <tbody id="shipTripTableBody" class="divide-y divide-slate-200"></tbody>

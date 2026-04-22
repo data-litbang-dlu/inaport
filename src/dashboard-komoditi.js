@@ -7,6 +7,7 @@ const MIN_SCAN_YEAR = 2000;
 const MAX_SCAN_AHEAD = 20;
 const TEMP_FILE_NAME = 'dashboard_temp.parquet';
 const MAX_OPTION_RENDER = 250;
+const FILE_PREFETCH_CONCURRENCY = 3;
 const COLOR_PALETTE = [
   '#2563eb', '#0ea5e9', '#14b8a6', '#22c55e', '#84cc16', '#f59e0b', '#ef4444', '#e11d48',
   '#9333ea', '#6366f1', '#06b6d4', '#10b981', '#f97316', '#8b5cf6', '#3b82f6', '#0f766e'
@@ -90,6 +91,7 @@ let applyFilterSequence = 0;
 let applyFilterFrame = null;
 let applyFilterTimeout = null;
 let currentShipTripStats = [];
+let currentShipTripYears = [];
 let shipTripCurrentPage = 1;
 let shipTripRowsPerPage = 10;
 
@@ -746,10 +748,7 @@ function aggregateYearly(filteredTrips, commodityRows, yearAxis, metric) {
     bucket.commoditySet.add(item.commodity);
 
     const value = metric === 'ton' ? item.ton : item.unit;
-    bucket.commodityMetric.set(
-      item.commodity,
-      (bucket.commodityMetric.get(item.commodity) || 0) + value
-    );
+    bucket.commodityMetric.set(item.commodity, (bucket.commodityMetric.get(item.commodity) || 0) + value);
   });
 
   return [...yearMap.values()].sort((a, b) => a.year - b.year);
@@ -773,20 +772,22 @@ function buildShipTripStats(filteredTrips) {
       shipMap.set(shipName, {
         kapal: shipName,
         tripCount: 0,
-        years: new Set()
+        tripsByYear: new Map()
       });
     }
 
     const bucket = shipMap.get(shipName);
     bucket.tripCount += 1;
-    bucket.years.add(trip.year);
+    bucket.tripsByYear.set(trip.year, (bucket.tripsByYear.get(trip.year) || 0) + 1);
   });
 
   return [...shipMap.values()]
     .map(item => ({
       kapal: item.kapal,
       tripCount: item.tripCount,
-      years: [...item.years].sort((a, b) => a - b)
+      tripsByYear: Object.fromEntries(
+        [...item.tripsByYear.entries()].sort((a, b) => a[0] - b[0])
+      )
     }))
     .sort((a, b) => {
       if (b.tripCount !== a.tripCount) return b.tripCount - a.tripCount;
@@ -794,7 +795,7 @@ function buildShipTripStats(filteredTrips) {
     });
 }
 
-function renderYearlyTable(yearlyData, metric) {
+function renderYearlyTable(yearlyData) {
   const tbody = byId('yearlyTableBody');
   tbody.innerHTML = '';
 
@@ -807,7 +808,6 @@ function renderYearlyTable(yearlyData, metric) {
   }
 
   yearlyData.forEach((yearData, index) => {
-    const topCommodity = getTopCommodity(yearData.commodityMetric);
     const row = document.createElement('tr');
     row.className = index % 2 === 0 ? 'bg-white' : 'bg-slate-50';
 
@@ -815,11 +815,11 @@ function renderYearlyTable(yearlyData, metric) {
       <td class="px-4 py-3 font-semibold text-slate-800">${yearData.year}</td>
       <td class="px-4 py-3 text-right font-medium text-slate-700">${formatNumber(yearData.tripCount, 0)}</td>
       <td class="px-4 py-3 text-right font-medium text-slate-700">${formatNumber(yearData.ton)}</td>
-      <td class="px-4 py-3 text-right font-medium text-slate-700">${formatNumber(yearData.unit, 0)}</td>
-      <td class="px-4 py-3 text-right text-slate-700">${yearData.commoditySet.size}</td>
-      <td class="px-4 py-3 text-slate-700">${topCommodity.name}</td>
-      <td class="px-4 py-3 text-right text-slate-700">${formatNumber(topCommodity.value, metric === 'ton' ? 2 : 0)}</td>
-    `;
+      `;
+      // <td class="px-4 py-3 text-right font-medium text-slate-700">${formatNumber(yearData.unit, 0)}</td>
+      // <td class="px-4 py-3 text-right text-slate-700">${yearData.commoditySet.size}</td>
+      // <td class="px-4 py-3 text-slate-700">${topCommodity.name}</td>
+      // <td class="px-4 py-3 text-right text-slate-700">${formatNumber(topCommodity.value, metric === 'ton' ? 2 : 0)}</td>
 
     tbody.appendChild(row);
   });
@@ -828,15 +828,31 @@ function renderYearlyTable(yearlyData, metric) {
 }
 
 function renderShipTripTable(shipStats, options = {}) {
-  const { resetPage = false } = options;
+  const { resetPage = false, years = currentShipTripYears } = options;
   const tbody = byId('shipTripTableBody');
+  const headerRow = byId('shipTripHeaderRow');
+  const table = byId('shipTripTable');
   if (!tbody) return;
 
   if (Array.isArray(shipStats)) {
     currentShipTripStats = shipStats;
   }
+  currentShipTripYears = Array.isArray(years) ? years : [];
   if (resetPage) {
     shipTripCurrentPage = 1;
+  }
+
+  if (headerRow) {
+    headerRow.innerHTML = `
+      <th class="px-4 py-3 text-left">Nama Kapal</th>
+      <th class="px-4 py-3 text-right">Total Trip</th>
+      ${currentShipTripYears.map(year => `<th class="px-4 py-3 text-right">${year}</th>`).join('')}
+    `;
+  }
+
+  if (table) {
+    const minWidth = 320 + (Math.max(currentShipTripYears.length, 1) * 120);
+    table.style.minWidth = `${minWidth}px`;
   }
 
   tbody.innerHTML = '';
@@ -852,18 +868,21 @@ function renderShipTripTable(shipStats, options = {}) {
 
   if (totalItems === 0) {
     const row = document.createElement('tr');
-    row.innerHTML = '<td colspan="3" class="px-4 py-8 text-center text-slate-500">Tidak ada data trip kapal pada filter saat ini.</td>';
+    row.innerHTML = `<td colspan="${Math.max(2 + currentShipTripYears.length, 3)}" class="px-4 py-8 text-center text-slate-500">Tidak ada data trip kapal pada filter saat ini.</td>`;
     tbody.appendChild(row);
     byId('shipTripMeta').textContent = '0 kapal';
   } else {
     pageItems.forEach((ship, index) => {
       const row = document.createElement('tr');
       row.className = index % 2 === 0 ? 'bg-white' : 'bg-slate-50';
+      const yearCells = currentShipTripYears
+        .map(year => `<td class="px-4 py-3 text-right text-slate-700">${formatNumber(ship.tripsByYear[year] || 0, 0)}</td>`)
+        .join('');
 
       row.innerHTML = `
       <td class="px-4 py-3 font-medium text-slate-800">${ship.kapal}</td>
       <td class="px-4 py-3 text-right font-semibold text-slate-700">${formatNumber(ship.tripCount, 0)}</td>
-      <td class="px-4 py-3 text-slate-700">${ship.years.join(', ')}</td>
+      ${yearCells}
     `;
 
       tbody.appendChild(row);
@@ -966,13 +985,13 @@ function renderComparisonChart(commodityRows, yearlyData, yearAxis, filters) {
 
   const metricLabel = filters.metric === 'ton' ? 'Tonase (Ton)' : 'Unit';
   const barDatasets = buildCommodityBarDatasets(commodityRows, yearAxis, filters.metric, filters.topN);
-
   const totalMetricData = yearlyData.map(item => (filters.metric === 'ton' ? item.ton : item.unit));
   const totalTripData = yearlyData.map(item => item.tripCount);
 
-  const datasets = [
-    ...barDatasets,
-    {
+  const datasets = [...barDatasets];
+
+  if (filters.metric === 'ton') {
+    datasets.push({
       type: 'line',
       label: `Tren Total ${metricLabel}`,
       data: totalMetricData,
@@ -982,8 +1001,10 @@ function renderComparisonChart(commodityRows, yearlyData, yearAxis, filters) {
       pointRadius: 3,
       tension: 0.25,
       yAxisID: 'yMetric'
-    },
-    {
+    });
+  }
+
+  datasets.push({
       type: 'line',
       label: 'Tren Jumlah Trip',
       data: totalTripData,
@@ -994,8 +1015,7 @@ function renderComparisonChart(commodityRows, yearlyData, yearAxis, filters) {
       pointRadius: 3,
       tension: 0.25,
       yAxisID: 'yTrip'
-    }
-  ];
+    });
 
   comparisonChart = new window.Chart(canvas, {
     type: 'bar',
@@ -1163,7 +1183,6 @@ function renderTrendChart(yearlyData, yearAxis, filters) {
 
 function updateSummary(filteredTrips, commodityRows, yearlyData, filters) {
   const totalTon = commodityRows.reduce((acc, item) => acc + item.ton, 0);
-  const totalUnit = commodityRows.reduce((acc, item) => acc + item.unit, 0);
   const totalTrips = filteredTrips.length;
   const uniqueCommodities = new Set(commodityRows.map(item => item.commodity)).size;
   const uniqueShips = new Set(filteredTrips.map(trip => normalizeLabel(trip.kapal, 'Tanpa Nama Kapal'))).size;
@@ -1178,7 +1197,6 @@ function updateSummary(filteredTrips, commodityRows, yearlyData, filters) {
   }
 
   byId('summaryTotalTon').textContent = formatNumber(totalTon);
-  byId('summaryTotalUnit').textContent = formatNumber(totalUnit, 0);
   byId('summaryTotalTrips').textContent = formatNumber(totalTrips, 0);
 
   const activeYearRows = yearlyData.filter(item => item.tripCount > 0 || item.ton > 0 || item.unit > 0).length;
@@ -1239,7 +1257,7 @@ function applyFiltersAndRenderImmediate() {
 
   updateSummary(filteredTrips, commodityRows, yearlyData, filters);
   renderYearlyTable(yearlyData, filters.metric);
-  renderShipTripTable(shipTripStats, { resetPage: true });
+  renderShipTripTable(shipTripStats, { resetPage: true, years: yearAxis });
   renderComparisonChart(commodityRows, yearlyData, yearAxis, filters);
   renderTrendChart(yearlyData, yearAxis, filters);
   updateActiveFilterSummary(filters);
@@ -1413,17 +1431,52 @@ async function initDuckDb() {
   conn = await db.connect();
 }
 
-async function extractTripsFromFile(fileInfo) {
+async function fetchFileBuffer(fileInfo) {
   const response = await fetch(fileInfo.path);
   if (!response.ok) {
     throw new Error(`Gagal mengunduh ${fileInfo.name} (HTTP ${response.status})`);
   }
 
   const arrayBuffer = await response.arrayBuffer();
+  return {
+    fileInfo,
+    arrayBuffer
+  };
+}
+
+function getTempFileName(fileInfo) {
+  return `${TEMP_FILE_NAME.replace('.parquet', '')}_${fileInfo.year}.parquet`;
+}
+
+async function prefetchFileBuffers(files, onProgress = () => {}) {
+  const prefetched = new Array(files.length);
+  let nextIndex = 0;
+  let completed = 0;
+
+  const worker = async () => {
+    while (nextIndex < files.length) {
+      const currentIndex = nextIndex++;
+      prefetched[currentIndex] = await fetchFileBuffer(files[currentIndex]);
+      completed += 1;
+      onProgress(completed, files.length, files[currentIndex]);
+    }
+  };
+
+  const workers = Array.from(
+    { length: Math.min(FILE_PREFETCH_CONCURRENCY, files.length) },
+    () => worker()
+  );
+
+  await Promise.all(workers);
+  return prefetched;
+}
+
+async function extractTripsFromBuffer(fileInfo, arrayBuffer) {
   if (arrayBuffer.byteLength === 0) return [];
 
-  await db.registerFileBuffer(TEMP_FILE_NAME, new Uint8Array(arrayBuffer));
-  const queryResult = await conn.query(`SELECT * FROM read_parquet('${TEMP_FILE_NAME}')`);
+  const tempFileName = getTempFileName(fileInfo);
+  await db.registerFileBuffer(tempFileName, new Uint8Array(arrayBuffer));
+  const queryResult = await conn.query(`SELECT * FROM read_parquet('${tempFileName}')`);
   const rows = queryResult.toArray().map(row => row.toJSON());
   if (rows.length === 0) return [];
 
@@ -1436,12 +1489,16 @@ async function extractTripsFromFile(fileInfo) {
 
 async function loadAllTrips(files) {
   const loadedTrips = [];
+  showStatus('Mengunduh database untuk mempercepat pemrosesan...');
+  const prefetchedFiles = await prefetchFileBuffers(files, (completed, total, fileInfo) => {
+    showStatus(`Mengunduh ${fileInfo.name} (${completed}/${total})...`);
+  });
 
-  for (let i = 0; i < files.length; i++) {
-    const fileInfo = files[i];
+  for (let i = 0; i < prefetchedFiles.length; i++) {
+    const { fileInfo, arrayBuffer } = prefetchedFiles[i];
     showStatus(`Memuat ${fileInfo.name} (${i + 1}/${files.length})...`);
 
-    const fileTrips = await extractTripsFromFile(fileInfo);
+    const fileTrips = await extractTripsFromBuffer(fileInfo, arrayBuffer);
     appendItems(loadedTrips, fileTrips);
   }
 
