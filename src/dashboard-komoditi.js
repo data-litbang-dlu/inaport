@@ -94,6 +94,16 @@ let currentShipTripStats = [];
 let currentShipTripYears = [];
 let shipTripCurrentPage = 1;
 let shipTripRowsPerPage = 10;
+let xlsxModule = null;
+let xlsxModulePromise = null;
+let currentExportSnapshots = {
+  filters: null,
+  yearAxis: [],
+  filteredTrips: [],
+  commodityRows: [],
+  yearlyData: [],
+  shipTripStats: []
+};
 
 function byId(id) {
   return document.getElementById(id);
@@ -175,6 +185,15 @@ function truncateText(text, maxLength = 24) {
   return `${value.slice(0, maxLength - 3)}...`;
 }
 
+function sanitizeFilePart(value, fallback = 'data') {
+  const sanitized = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9_-]/g, '');
+  return sanitized || fallback;
+}
+
 function showStatus(text, visible = true) {
   const statusEl = byId('status');
   const statusTextEl = byId('statusText');
@@ -215,6 +234,44 @@ function setApplyFilterIndicator(isApplying) {
     indicator.classList.remove('hidden');
   } else {
     indicator.classList.add('hidden');
+  }
+}
+
+async function loadXLSXModule() {
+  if (window.XLSX) {
+    xlsxModule = window.XLSX;
+    return xlsxModule;
+  }
+
+  if (xlsxModule) return xlsxModule;
+  if (!xlsxModulePromise) {
+    xlsxModulePromise = new Promise((resolve, reject) => {
+      if (window.XLSX) {
+        resolve(window.XLSX);
+        return;
+      }
+
+      const existingScript = byId('xlsx-cdn-script');
+      const script = existingScript || document.createElement('script');
+      script.src = './xlsx.full.min.js';
+      script.id = 'xlsx-cdn-script';
+      script.async = true;
+      script.onload = () => resolve(window.XLSX);
+      script.onerror = () => reject(new Error('Pustaka XLSX tidak dapat dimuat dari file lokal xlsx.full.min.js.'));
+      if (!existingScript) {
+        document.head.appendChild(script);
+      }
+    });
+  }
+
+  try {
+    xlsxModule = await xlsxModulePromise;
+    if (!xlsxModule) throw new Error('Objek XLSX tidak ditemukan setelah script dimuat.');
+    return xlsxModule;
+  } catch (error) {
+    error.isXLSXLoadError = true;
+    showError(`Gagal memuat pustaka XLSX: ${error.message}`);
+    throw error;
   }
 }
 
@@ -1242,6 +1299,61 @@ function updateActiveFilterSummary(filters) {
   resetBtn.disabled = activeCount === 0;
 }
 
+async function exportSnapshotToExcel(datasetType) {
+  try {
+    const filters = currentExportSnapshots.filters || getSimpleFilterState();
+    const activeFilterCount = countActiveFilters(filters);
+    if (activeFilterCount === 0) {
+      showError('Pilih filter terlebih dahulu sebelum export agar data tidak terlalu besar.');
+      return;
+    }
+
+    const XLSX = await loadXLSXModule();
+    let dataRows = [];
+    let sheetName = 'Data';
+
+    if (datasetType === 'commodity') {
+      dataRows = mapCommodityRowsForExport(currentExportSnapshots.commodityRows);
+      sheetName = 'Raw Tonase';
+    } else if (datasetType === 'trip') {
+      dataRows = mapTripsForExport(currentExportSnapshots.filteredTrips);
+      sheetName = 'Raw Trip';
+    } else if (datasetType === 'yearly') {
+      dataRows = mapYearlyDataForExport(currentExportSnapshots.yearlyData);
+      sheetName = 'Ringkasan Tahun';
+    } else if (datasetType === 'shipTrip') {
+      dataRows = mapShipTripStatsForExport(currentExportSnapshots.shipTripStats, currentExportSnapshots.yearAxis);
+      sheetName = 'Trip Kapal';
+    } else {
+      throw new Error('Tipe ekspor tidak dikenali.');
+    }
+
+    if (dataRows.length === 0) {
+      showError('Tidak ada data yang bisa diekspor untuk filter saat ini.');
+      return;
+    }
+
+    const workbook = XLSX.utils.book_new();
+    const { infoRows, dataRows: normalizedDataRows } = buildExportSheetRows(datasetType, dataRows, filters);
+    const dataWorksheet = XLSX.utils.json_to_sheet(normalizedDataRows);
+    const infoWorksheet = XLSX.utils.json_to_sheet(infoRows);
+    XLSX.utils.book_append_sheet(workbook, dataWorksheet, sheetName);
+    XLSX.utils.book_append_sheet(workbook, infoWorksheet, 'Info Filter');
+
+    const fileName = [
+      'dashboard-komoditi',
+      sanitizeFilePart(sheetName, 'data'),
+      sanitizeFilePart(`${filters.yearStart || 'semua'}-${filters.yearEnd || 'tahun'}`, 'tahun')
+    ].join('_') + '.xlsx';
+
+    XLSX.writeFile(workbook, fileName);
+  } catch (error) {
+    if (!error?.isXLSXLoadError) {
+      showError(error.message || 'Gagal mengekspor data ke Excel.');
+    }
+  }
+}
+
 function applyFiltersAndRenderImmediate() {
   const filters = getSimpleFilterState();
 
@@ -1254,6 +1366,7 @@ function applyFiltersAndRenderImmediate() {
   const yearAxis = buildYearAxis(filters.yearStart, filters.yearEnd);
   const yearlyData = aggregateYearly(filteredTrips, commodityRows, yearAxis, filters.metric);
   const shipTripStats = buildShipTripStats(filteredTrips);
+  setCurrentExportSnapshots({ filters, yearAxis, filteredTrips, commodityRows, yearlyData, shipTripStats });
 
   updateSummary(filteredTrips, commodityRows, yearlyData, filters);
   renderYearlyTable(yearlyData, filters.metric);
@@ -1351,6 +1464,22 @@ function registerSimpleFilterEvents() {
   }
 }
 
+function registerExportActions() {
+  const exportBindings = [
+    ['exportTripRawBtn', 'trip'],
+    ['exportYearlyRawBtn', 'yearly'],
+    ['exportShipTripRawBtn', 'shipTrip']
+  ];
+
+  exportBindings.forEach(([id, datasetType]) => {
+    const button = byId(id);
+    if (!button) return;
+    button.addEventListener('click', () => exportSnapshotToExcel(datasetType));
+  });
+
+  updateExportButtonsState();
+}
+
 async function scanAvailableFiles() {
   const fromName = rawName => {
     const normalizedName = decodeURIComponent(String(rawName || '').trim());
@@ -1442,6 +1571,157 @@ async function fetchFileBuffer(fileInfo) {
     fileInfo,
     arrayBuffer
   };
+}
+
+function getActiveFilterEntries(filters) {
+  const entries = [];
+
+  if (filters.yearStart || filters.yearEnd) {
+    entries.push({
+      filter: 'Rentang Tahun',
+      value: `${filters.yearStart || '-'} - ${filters.yearEnd || '-'}`
+    });
+  }
+
+  entries.push({
+    filter: 'Arah Muatan',
+    value: filters.direction === 'ALL' ? 'Semua Arah' : filters.direction
+  });
+  entries.push({
+    filter: 'Metrik',
+    value: filters.metric === 'ton' ? 'Tonase (Ton)' : 'Unit'
+  });
+  entries.push({
+    filter: 'Top Grafik',
+    value: `Top ${filters.topN}`
+  });
+
+  FILTER_TYPES.forEach(filterType => {
+    const selected = Array.from(selectedFilters[filterType]);
+    if (selected.length === 0) return;
+    entries.push({
+      filter: FILTER_META[filterType].activeLabel,
+      value: selected.join('; ')
+    });
+  });
+
+  if (filters.tibaStart || filters.tibaEnd) {
+    entries.push({
+      filter: 'Tanggal Kedatangan',
+      value: `${filters.tibaStart || '-'} s/d ${filters.tibaEnd || '-'}`
+    });
+  }
+
+  if (filters.berangkatStart || filters.berangkatEnd) {
+    entries.push({
+      filter: 'Tanggal Keberangkatan',
+      value: `${filters.berangkatStart || '-'} s/d ${filters.berangkatEnd || '-'}`
+    });
+  }
+
+  if (filters.bongkarMin !== null || filters.bongkarMax !== null) {
+    entries.push({
+      filter: 'Tonase Bongkar',
+      value: `${filters.bongkarMin ?? '-'} s/d ${filters.bongkarMax ?? '-'}`
+    });
+  }
+
+  if (filters.muatMin !== null || filters.muatMax !== null) {
+    entries.push({
+      filter: 'Tonase Muat',
+      value: `${filters.muatMin ?? '-'} s/d ${filters.muatMax ?? '-'}`
+    });
+  }
+
+  return entries;
+}
+
+function buildExportSheetRows(datasetType, rows, filters) {
+  const filterEntries = getActiveFilterEntries(filters);
+  return {
+    infoRows: filterEntries.length > 0 ? filterEntries : [{ filter: 'Status Filter', value: 'Tidak ada filter aktif' }],
+    dataRows: rows.length > 0 ? rows : [{ Keterangan: `Tidak ada data untuk ekspor ${datasetType}.` }]
+  };
+}
+
+function updateExportButtonsState() {
+  const buttonState = {
+    exportTripRawBtn: currentExportSnapshots.filteredTrips.length === 0,
+    exportYearlyRawBtn: currentExportSnapshots.yearlyData.length === 0,
+    exportShipTripRawBtn: currentExportSnapshots.shipTripStats.length === 0
+  };
+
+  Object.entries(buttonState).forEach(([id, disabled]) => {
+    const button = byId(id);
+    if (button) button.disabled = disabled;
+  });
+}
+
+function mapTripsForExport(trips = []) {
+  return trips.map(trip => ({
+    Tahun: trip.year,
+    Kapal: normalizeLabel(trip.kapal, '-'),
+    'Jenis Kapal': normalizeLabel(trip.jenisKapal, '-'),
+    'Berangkat Ke': normalizeLabel(trip.berangkatKe, '-'),
+    'Tiba Dari': normalizeLabel(trip.tibaDari, '-'),
+    Trayek: normalizeLabel(trip.trayek, '-'),
+    'Tanggal Tiba': trip.tibaTanggal || '-',
+    'Tanggal Berangkat': trip.berangkatTanggal || '-',
+    'Ton Bongkar': trip.bongkarTon,
+    'Ton Muat': trip.muatTon,
+    'Jumlah Item Cocok': trip.matchedItems?.length || 0,
+    'Komoditi Cocok': (trip.matchedItems || []).map(item => item.commodity).join('; ') || '-',
+    'Kategori Cocok': (trip.matchedItems || []).map(item => item.category).join('; ') || '-'
+  }));
+}
+
+function mapCommodityRowsForExport(rows = []) {
+  return rows.map(item => ({
+    Tahun: item.year,
+    Arah: item.direction,
+    Komoditi: item.commodity,
+    Kategori: item.category,
+    Ton: item.ton,
+    Unit: item.unit,
+    Kapal: normalizeLabel(item.kapal, '-')
+  }));
+}
+
+function mapYearlyDataForExport(yearlyData = []) {
+  return yearlyData.map(item => ({
+    Tahun: item.year,
+    Trip: item.tripCount,
+    Tonase: item.ton,
+    Unit: item.unit,
+    'Komoditi Unik': item.commoditySet?.size || 0
+  }));
+}
+
+function mapShipTripStatsForExport(shipStats = [], years = []) {
+  return shipStats.map(item => {
+    const row = {
+      'Nama Kapal': item.kapal,
+      'Total Trip': item.tripCount
+    };
+
+    years.forEach(year => {
+      row[String(year)] = item.tripsByYear?.[year] || 0;
+    });
+
+    return row;
+  });
+}
+
+function setCurrentExportSnapshots({ filters, yearAxis, filteredTrips, commodityRows, yearlyData, shipTripStats }) {
+  currentExportSnapshots = {
+    filters: { ...filters },
+    yearAxis: [...yearAxis],
+    filteredTrips: [...filteredTrips],
+    commodityRows: [...commodityRows],
+    yearlyData: [...yearlyData],
+    shipTripStats: [...shipTripStats]
+  };
+  updateExportButtonsState();
 }
 
 function getTempFileName(fileInfo) {
@@ -1559,6 +1839,7 @@ async function bootstrap() {
   try {
     setupSearchableFilterEvents();
     registerSimpleFilterEvents();
+    registerExportActions();
     registerShipTripPaginationEvents();
     registerGlobalActions();
 

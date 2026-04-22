@@ -94,6 +94,31 @@
       box-shadow: none;
     }
 
+    .export-btn {
+      min-height: 34px;
+      padding: 7px 12px;
+      border-radius: 10px;
+      border: 1px solid #cbd5e1;
+      background: #ffffff;
+      color: #0f172a;
+      font-size: 12px;
+      font-weight: 700;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+    }
+
+    .export-btn:hover {
+      background: #eff6ff;
+      border-color: #93c5fd;
+      color: #1d4ed8;
+    }
+
+    .export-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
     .filter-section-title {
       font-size: 0.72rem;
       font-weight: 700;
@@ -682,6 +707,7 @@
       <div class="bg-white border border-amber-200 rounded-xl p-4 shadow-sm bg-amber-50">
         <p class="text-xs uppercase tracking-wider font-semibold text-amber-700">Akumulasi Trip</p>
         <p id="summaryTotalTrips" class="text-2xl font-bold text-amber-800 mt-1">0</p>
+        <button id="exportTripRawBtn" type="button" class="export-btn mt-3 w-full" disabled>Export Raw Trip</button>
       </div>
     </div>
 
@@ -719,7 +745,10 @@
     <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 mb-6">
       <div class="flex items-center justify-between mb-3">
         <h2 class="text-lg font-bold text-slate-800">Ringkasan Per Tahun</h2>
-        <span id="tableMeta" class="text-xs font-semibold text-slate-600 bg-slate-100 border border-slate-200 rounded-full px-3 py-1.5">0 tahun</span>
+        <div class="flex items-center gap-2">
+          <span id="tableMeta" class="text-xs font-semibold text-slate-600 bg-slate-100 border border-slate-200 rounded-full px-3 py-1.5">0 tahun</span>
+          <button id="exportYearlyRawBtn" type="button" class="export-btn" disabled>Export Excel</button>
+        </div>
       </div>
       <div class="table-scroll overflow-auto">
         <table class="w-full text-sm border-collapse min-w-[920px]">
@@ -742,7 +771,10 @@
     <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5">
       <div class="flex items-center justify-between mb-3">
         <h2 class="text-lg font-bold text-slate-800">Akumulasi Jumlah Trip Berdasarkan Nama Kapal</h2>
-        <span id="shipTripMeta" class="text-xs font-semibold text-slate-600 bg-slate-100 border border-slate-200 rounded-full px-3 py-1.5">0 kapal</span>
+        <div class="flex items-center gap-2">
+          <span id="shipTripMeta" class="text-xs font-semibold text-slate-600 bg-slate-100 border border-slate-200 rounded-full px-3 py-1.5">0 kapal</span>
+          <button id="exportShipTripRawBtn" type="button" class="export-btn" disabled>Export Excel</button>
+        </div>
       </div>
       <div class="table-scroll overflow-auto">
         <table id="shipTripTable" class="w-full text-sm border-collapse min-w-[720px]">
