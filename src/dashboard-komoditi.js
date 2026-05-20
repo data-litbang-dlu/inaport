@@ -8,7 +8,7 @@ const MIN_SCAN_YEAR = 2000;
 const MAX_SCAN_AHEAD = 20;
 const TEMP_FILE_NAME = 'dashboard_temp.parquet';
 const MAX_OPTION_RENDER = 250;
-const FILE_PREFETCH_CONCURRENCY = 3;
+const ROW_MAP_CHUNK_SIZE = 1000;
 const COLOR_PALETTE = [
   '#2563eb', '#0ea5e9', '#14b8a6', '#22c55e', '#84cc16', '#f59e0b', '#ef4444', '#e11d48',
   '#9333ea', '#6366f1', '#06b6d4', '#10b981', '#f97316', '#8b5cf6', '#3b82f6', '#0f766e'
@@ -124,6 +124,10 @@ function debounce(callback, delay = 250) {
     clearTimeout(timeoutId);
     timeoutId = setTimeout(() => callback(...args), delay);
   };
+}
+
+function yieldToBrowser() {
+  return new Promise(resolve => setTimeout(resolve, 0));
 }
 
 function normalizeColumnName(value = '') {
@@ -357,7 +361,6 @@ function mapRawRowToTrip(rawRow, year, columnLookup, detailColumnName) {
   const detail = parseDetailPayload(detailPayload);
   const bongkarItems = extractDirectionalItems(detail, 'BONGKAR');
   const muatItems = extractDirectionalItems(detail, 'MUAT');
-  const allItems = [...bongkarItems, ...muatItems];
   const bongkarTon = bongkarItems.reduce((acc, item) => acc + item.ton, 0);
   const muatTon = muatItems.reduce((acc, item) => acc + item.ton, 0);
 
@@ -376,7 +379,7 @@ function mapRawRowToTrip(rawRow, year, columnLookup, detailColumnName) {
     muatTon,
     bongkarItems,
     muatItems,
-    allItems
+    matchedItems: []
   };
 }
 
@@ -396,15 +399,16 @@ function collectFilterOptions(trips = []) {
     addOption(optionSets.tibaDari, trip.tibaDari);
     addOption(optionSets.trayek, trip.trayek);
 
-    trip.allItems.forEach(item => {
+    trip.bongkarItems.forEach(item => {
       addOption(optionSets.commodity, item.commodity);
       addOption(optionSets.category, item.category);
-      if (item.direction === 'BONGKAR') {
-        addOption(optionSets.jenisMuatanBongkar, item.category);
-      }
-      if (item.direction === 'MUAT') {
-        addOption(optionSets.jenisMuatanMuat, item.category);
-      }
+      addOption(optionSets.jenisMuatanBongkar, item.category);
+    });
+
+    trip.muatItems.forEach(item => {
+      addOption(optionSets.commodity, item.commodity);
+      addOption(optionSets.category, item.category);
+      addOption(optionSets.jenisMuatanMuat, item.category);
     });
   });
 
@@ -737,10 +741,8 @@ function applyAllFilters(filters) {
       return;
     }
 
-    filteredTrips.push({
-      ...trip,
-      matchedItems
-    });
+    trip.matchedItems = matchedItems;
+    filteredTrips.push(trip);
 
     matchedItems.forEach(item => {
       commodityRows.push({
@@ -1726,28 +1728,61 @@ function getTempFileName(fileInfo) {
   return `${TEMP_FILE_NAME.replace('.parquet', '')}_${fileInfo.year}.parquet`;
 }
 
-async function prefetchFileBuffers(files, onProgress = () => {}) {
-  const prefetched = new Array(files.length);
-  let nextIndex = 0;
-  let completed = 0;
+function quoteDuckDbIdentifier(identifier) {
+  return `"${String(identifier).replace(/"/g, '""')}"`;
+}
 
-  const worker = async () => {
-    while (nextIndex < files.length) {
-      const currentIndex = nextIndex++;
-      const fetchedFile = await fetchFileBuffer(files[currentIndex]);
-      prefetched[currentIndex] = fetchedFile;
-      completed += 1;
-      onProgress(completed, files.length, fetchedFile);
+async function getParquetColumns(tempFileName) {
+  const schemaResult = await conn.query(`DESCRIBE SELECT * FROM read_parquet('${tempFileName}')`);
+  return schemaResult.toArray()
+    .map(row => typeof row.toJSON === 'function' ? row.toJSON() : row)
+    .map(row => row.column_name || row.columnName || Object.values(row)[0])
+    .filter(Boolean);
+}
+
+function getDashboardColumnsToRead(columns = []) {
+  const columnLookup = createColumnLookup(columns);
+  const selected = new Set();
+
+  Object.values(COLUMN_ALIASES).flat().forEach(alias => {
+    const columnName = columnLookup.get(normalizeColumnName(alias));
+    if (columnName) selected.add(columnName);
+  });
+
+  columns
+    .filter(columnName => /DETAIL|BONGKAR_MUAT/i.test(String(columnName)))
+    .forEach(columnName => selected.add(columnName));
+
+  return Array.from(selected);
+}
+
+async function releaseDuckDbFile(fileName) {
+  if (typeof db?.dropFile !== 'function') return;
+
+  try {
+    await db.dropFile(fileName);
+  } catch (_error) {
+    // Some DuckDB WASM builds keep registered files for the session; parsing can continue safely.
+  }
+}
+
+function duckRowToObject(row) {
+  return typeof row?.toJSON === 'function' ? row.toJSON() : row;
+}
+
+async function mapRowsToTrips(rows, fileInfo, columnLookup, detailColumnName) {
+  const trips = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    trips.push(mapRawRowToTrip(duckRowToObject(rows[i]), fileInfo.year, columnLookup, detailColumnName));
+
+    if (i > 0 && i % ROW_MAP_CHUNK_SIZE === 0) {
+      showStatus(`Memetakan ${fileInfo.name} (${i.toLocaleString('id-ID')}/${rows.length.toLocaleString('id-ID')})...`);
+      await yieldToBrowser();
     }
-  };
+  }
 
-  const workers = Array.from(
-    { length: Math.min(FILE_PREFETCH_CONCURRENCY, files.length) },
-    () => worker()
-  );
-
-  await Promise.all(workers);
-  return prefetched;
+  return trips;
 }
 
 async function extractTripsFromBuffer(fileInfo, arrayBuffer) {
@@ -1755,29 +1790,40 @@ async function extractTripsFromBuffer(fileInfo, arrayBuffer) {
 
   const tempFileName = getTempFileName(fileInfo);
   await db.registerFileBuffer(tempFileName, new Uint8Array(arrayBuffer));
-  const queryResult = await conn.query(`SELECT * FROM read_parquet('${tempFileName}')`);
-  const rows = queryResult.toArray().map(row => row.toJSON());
-  if (rows.length === 0) return [];
 
-  const columns = Object.keys(rows[0]);
-  const columnLookup = createColumnLookup(columns);
-  const detailColumnName = columns.find(columnName => /DETAIL|BONGKAR_MUAT/i.test(String(columnName)));
+  try {
+    const allColumns = await getParquetColumns(tempFileName);
+    const selectedColumns = getDashboardColumnsToRead(allColumns);
+    const selectList = selectedColumns.length > 0
+      ? selectedColumns.map(quoteDuckDbIdentifier).join(', ')
+      : '*';
+    const queryResult = await conn.query(`SELECT ${selectList} FROM read_parquet('${tempFileName}')`);
+    const rows = queryResult.toArray();
+    if (rows.length === 0) return [];
 
-  return rows.map(rawRow => mapRawRowToTrip(rawRow, fileInfo.year, columnLookup, detailColumnName));
+    const firstRow = duckRowToObject(rows[0]);
+    const resolvedColumns = selectedColumns.length > 0 ? selectedColumns : Object.keys(firstRow);
+    const columnLookup = createColumnLookup(resolvedColumns);
+    const detailColumnName = resolvedColumns.find(columnName => /DETAIL|BONGKAR_MUAT/i.test(String(columnName)));
+
+    return await mapRowsToTrips(rows, fileInfo, columnLookup, detailColumnName);
+  } finally {
+    await releaseDuckDbFile(tempFileName);
+  }
 }
 
 async function loadAllTrips(files) {
   const loadedTrips = [];
   showStatus('Menyiapkan database dari cache browser atau server...');
-  const prefetchedFiles = await prefetchFileBuffers(files, (completed, total, fetchedFile) => {
+
+  for (let i = 0; i < files.length; i++) {
+    const fetchedFile = await fetchFileBuffer(files[i]);
     const sourceLabel = fetchedFile.wasInvalidated
       ? 'server (cache diperbarui)'
       : fetchedFile.source.startsWith('cache') ? 'cache browser' : 'server';
-    showStatus(`Menyiapkan ${fetchedFile.fileInfo.name} dari ${sourceLabel} (${completed}/${total})...`);
-  });
+    showStatus(`Menyiapkan ${fetchedFile.fileInfo.name} dari ${sourceLabel} (${i + 1}/${files.length})...`);
 
-  for (let i = 0; i < prefetchedFiles.length; i++) {
-    const { fileInfo, arrayBuffer } = prefetchedFiles[i];
+    const { fileInfo, arrayBuffer } = fetchedFile;
     showStatus(`Memuat ${fileInfo.name} (${i + 1}/${files.length})...`);
 
     const fileTrips = await extractTripsFromBuffer(fileInfo, arrayBuffer);
