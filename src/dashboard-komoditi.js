@@ -1,4 +1,5 @@
 import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/+esm';
+import { fetchCachedArrayBuffer } from './browser-cache.js';
 
 const DB_FOLDER = './database/';
 const FILE_PREFIX = 'Data ';
@@ -1561,15 +1562,12 @@ async function initDuckDb() {
 }
 
 async function fetchFileBuffer(fileInfo) {
-  const response = await fetch(fileInfo.path);
-  if (!response.ok) {
-    throw new Error(`Gagal mengunduh ${fileInfo.name} (HTTP ${response.status})`);
-  }
-
-  const arrayBuffer = await response.arrayBuffer();
+  const cachedFile = await fetchCachedArrayBuffer(fileInfo);
   return {
     fileInfo,
-    arrayBuffer
+    arrayBuffer: cachedFile.arrayBuffer,
+    source: cachedFile.source,
+    wasInvalidated: cachedFile.wasInvalidated
   };
 }
 
@@ -1736,9 +1734,10 @@ async function prefetchFileBuffers(files, onProgress = () => {}) {
   const worker = async () => {
     while (nextIndex < files.length) {
       const currentIndex = nextIndex++;
-      prefetched[currentIndex] = await fetchFileBuffer(files[currentIndex]);
+      const fetchedFile = await fetchFileBuffer(files[currentIndex]);
+      prefetched[currentIndex] = fetchedFile;
       completed += 1;
-      onProgress(completed, files.length, files[currentIndex]);
+      onProgress(completed, files.length, fetchedFile);
     }
   };
 
@@ -1769,9 +1768,12 @@ async function extractTripsFromBuffer(fileInfo, arrayBuffer) {
 
 async function loadAllTrips(files) {
   const loadedTrips = [];
-  showStatus('Mengunduh database untuk mempercepat pemrosesan...');
-  const prefetchedFiles = await prefetchFileBuffers(files, (completed, total, fileInfo) => {
-    showStatus(`Mengunduh ${fileInfo.name} (${completed}/${total})...`);
+  showStatus('Menyiapkan database dari cache browser atau server...');
+  const prefetchedFiles = await prefetchFileBuffers(files, (completed, total, fetchedFile) => {
+    const sourceLabel = fetchedFile.wasInvalidated
+      ? 'server (cache diperbarui)'
+      : fetchedFile.source.startsWith('cache') ? 'cache browser' : 'server';
+    showStatus(`Menyiapkan ${fetchedFile.fileInfo.name} dari ${sourceLabel} (${completed}/${total})...`);
   });
 
   for (let i = 0; i < prefetchedFiles.length; i++) {

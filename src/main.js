@@ -1,4 +1,5 @@
 import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/+esm';
+import { fetchCachedArrayBuffer } from './browser-cache.js';
 
 // --- KONFIGURASI FOLDER ---
 const DB_FOLDER = './database/';
@@ -906,10 +907,10 @@ async function initDuckDB() {
 
 async function loadStatisticsDb() {
   try {
-    const response = await fetch(statsDbUrl);
-    if (!response.ok) throw new Error("File statistik.parquet tidak ditemukan");
-
-    const arrayBuffer = await response.arrayBuffer();
+    const { arrayBuffer } = await fetchCachedArrayBuffer({
+      path: statsDbUrl,
+      name: STATS_FILENAME
+    });
     await db.registerFileBuffer('temp_stats.parquet', new Uint8Array(arrayBuffer));
     await conn.query(`DROP TABLE IF EXISTS stats_table`);
     await conn.query(`CREATE TABLE stats_table AS SELECT * FROM read_parquet('temp_stats.parquet')`);
@@ -921,7 +922,8 @@ async function loadStatisticsDb() {
 }
 
 async function autoLoadDatabase() {
-  showLoading(true, `Mengunduh ${currentDbUrl}...`);
+  const currentDbName = decodeURIComponent(currentDbUrl.split('/').pop() || currentDbUrl);
+  showLoading(true, `Menyiapkan ${currentDbName}...`);
   hideError();
 
   document.getElementById('table-wrapper').classList.add('hidden');
@@ -932,13 +934,18 @@ async function autoLoadDatabase() {
   try {
     if (!db || !conn) return;
 
-    const response = await fetch(currentDbUrl);
-    if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
-    const arrayBuffer = await response.arrayBuffer();
+    const cachedFile = await fetchCachedArrayBuffer({
+      path: currentDbUrl,
+      name: currentDbName
+    });
+    const sourceLabel = cachedFile.wasInvalidated
+      ? 'server (cache diperbarui)'
+      : cachedFile.source.startsWith('cache') ? 'cache browser' : 'server';
+    const arrayBuffer = cachedFile.arrayBuffer;
 
     if (arrayBuffer.byteLength === 0) throw new Error("File kosong (0 bytes).");
 
-    showLoading(true, "Membangun Tabel Data...");
+    showLoading(true, `Membangun tabel data dari ${sourceLabel}...`);
 
     await db.registerFileBuffer('temp_source.parquet', new Uint8Array(arrayBuffer));
     await conn.query(`DROP TABLE IF EXISTS my_table`);
