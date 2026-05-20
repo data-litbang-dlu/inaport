@@ -88,6 +88,7 @@ const TONNAGE_FILTER_GROUPS = {
     ids: [TONNAGE_FIELD_IDS.muatMin, TONNAGE_FIELD_IDS.muatMax]
   }
 };
+const ROW_CONVERSION_CHUNK_SIZE = 1000;
 
 function createFilterState(factory) {
   return Object.fromEntries(FILTER_TYPES.map(filterType => [filterType, factory(filterType)]));
@@ -198,6 +199,10 @@ function debounce(callback, delay = 250) {
   };
 }
 
+function yieldToBrowser() {
+  return new Promise(resolve => setTimeout(resolve, 0));
+}
+
 function truncateText(text, maxLength = 28) {
   const value = String(text || '').trim();
   if (value.length <= maxLength) return value;
@@ -239,7 +244,6 @@ function getRowDetailSummary(row, columnIndexes = getColumnIndexes()) {
   const bongkarItems = Array.isArray(detail?.BONGKAR) ? detail.BONGKAR : [];
   const muatItems = Array.isArray(detail?.MUAT) ? detail.MUAT : [];
   const summary = {
-    detail,
     bongkarKomoditi: bongkarItems.map(item => String(item?.KOMODITIBONGKAR || '').trim()).filter(Boolean),
     muatKomoditi: muatItems.map(item => String(item?.KOMODITIMUAT || '').trim()).filter(Boolean),
     bongkarTon: sumDetailTonnage(bongkarItems, 'TONBONGKAR'),
@@ -276,31 +280,66 @@ function doesRowMatchOptionFilter(filterType, row, columnIndexes = getColumnInde
 }
 
 function doesRowMatchDateFilters(row, columnIndexes = getColumnIndexes()) {
+  return doesRowMatchDateFilterState(row, columnIndexes, getRangeFilterState());
+}
+
+function getRangeFilterState() {
+  return {
+    tibaStart: document.getElementById(DATE_FIELD_IDS.tibaStart)?.value || '',
+    tibaEnd: document.getElementById(DATE_FIELD_IDS.tibaEnd)?.value || '',
+    berangkatStart: document.getElementById(DATE_FIELD_IDS.berangkatStart)?.value || '',
+    berangkatEnd: document.getElementById(DATE_FIELD_IDS.berangkatEnd)?.value || '',
+    bongkarMin: safeParseNumber(document.getElementById(TONNAGE_FIELD_IDS.bongkarMin)?.value),
+    bongkarMax: safeParseNumber(document.getElementById(TONNAGE_FIELD_IDS.bongkarMax)?.value),
+    muatMin: safeParseNumber(document.getElementById(TONNAGE_FIELD_IDS.muatMin)?.value),
+    muatMax: safeParseNumber(document.getElementById(TONNAGE_FIELD_IDS.muatMax)?.value)
+  };
+}
+
+function hasDateRangeFilters(rangeFilters) {
+  return Boolean(
+    rangeFilters.tibaStart ||
+    rangeFilters.tibaEnd ||
+    rangeFilters.berangkatStart ||
+    rangeFilters.berangkatEnd
+  );
+}
+
+function hasTonnageRangeFilters(rangeFilters) {
+  return (
+    rangeFilters.bongkarMin !== null ||
+    rangeFilters.bongkarMax !== null ||
+    rangeFilters.muatMin !== null ||
+    rangeFilters.muatMax !== null
+  );
+}
+
+function doesRowMatchDateFilterState(row, columnIndexes = getColumnIndexes(), rangeFilters = getRangeFilterState()) {
+  if (!hasDateRangeFilters(rangeFilters)) return true;
+
   const tibaDate = parseDateOnly(columnIndexes.tibaTanggal !== -1 ? row[columnIndexes.tibaTanggal] : null);
   const berangkatDate = parseDateOnly(columnIndexes.berangkatTanggal !== -1 ? row[columnIndexes.berangkatTanggal] : null);
-  const tibaStart = document.getElementById(DATE_FIELD_IDS.tibaStart)?.value || '';
-  const tibaEnd = document.getElementById(DATE_FIELD_IDS.tibaEnd)?.value || '';
-  const berangkatStart = document.getElementById(DATE_FIELD_IDS.berangkatStart)?.value || '';
-  const berangkatEnd = document.getElementById(DATE_FIELD_IDS.berangkatEnd)?.value || '';
 
-  if (tibaStart && (!tibaDate || tibaDate < tibaStart)) return false;
-  if (tibaEnd && (!tibaDate || tibaDate > tibaEnd)) return false;
-  if (berangkatStart && (!berangkatDate || berangkatDate < berangkatStart)) return false;
-  if (berangkatEnd && (!berangkatDate || berangkatDate > berangkatEnd)) return false;
+  if (rangeFilters.tibaStart && (!tibaDate || tibaDate < rangeFilters.tibaStart)) return false;
+  if (rangeFilters.tibaEnd && (!tibaDate || tibaDate > rangeFilters.tibaEnd)) return false;
+  if (rangeFilters.berangkatStart && (!berangkatDate || berangkatDate < rangeFilters.berangkatStart)) return false;
+  if (rangeFilters.berangkatEnd && (!berangkatDate || berangkatDate > rangeFilters.berangkatEnd)) return false;
   return true;
 }
 
 function doesRowMatchTonnageFilters(row, columnIndexes = getColumnIndexes()) {
-  const detailSummary = getRowDetailSummary(row, columnIndexes);
-  const bongkarMin = safeParseNumber(document.getElementById(TONNAGE_FIELD_IDS.bongkarMin)?.value);
-  const bongkarMax = safeParseNumber(document.getElementById(TONNAGE_FIELD_IDS.bongkarMax)?.value);
-  const muatMin = safeParseNumber(document.getElementById(TONNAGE_FIELD_IDS.muatMin)?.value);
-  const muatMax = safeParseNumber(document.getElementById(TONNAGE_FIELD_IDS.muatMax)?.value);
+  return doesRowMatchTonnageFilterState(row, columnIndexes, getRangeFilterState());
+}
 
-  if (bongkarMin !== null && detailSummary.bongkarTon < bongkarMin) return false;
-  if (bongkarMax !== null && detailSummary.bongkarTon > bongkarMax) return false;
-  if (muatMin !== null && detailSummary.muatTon < muatMin) return false;
-  if (muatMax !== null && detailSummary.muatTon > muatMax) return false;
+function doesRowMatchTonnageFilterState(row, columnIndexes = getColumnIndexes(), rangeFilters = getRangeFilterState()) {
+  if (!hasTonnageRangeFilters(rangeFilters)) return true;
+
+  const detailSummary = getRowDetailSummary(row, columnIndexes);
+
+  if (rangeFilters.bongkarMin !== null && detailSummary.bongkarTon < rangeFilters.bongkarMin) return false;
+  if (rangeFilters.bongkarMax !== null && detailSummary.bongkarTon > rangeFilters.bongkarMax) return false;
+  if (rangeFilters.muatMin !== null && detailSummary.muatTon < rangeFilters.muatMin) return false;
+  if (rangeFilters.muatMax !== null && detailSummary.muatTon > rangeFilters.muatMax) return false;
   return true;
 }
 
@@ -905,6 +944,44 @@ async function initDuckDB() {
   }
 }
 
+async function dropDuckDbRelation(name) {
+  try {
+    await conn.query(`DROP VIEW IF EXISTS ${name}`);
+  } catch (_error) {
+    // The relation may be a table from an older loading path.
+  }
+
+  try {
+    await conn.query(`DROP TABLE IF EXISTS ${name}`);
+  } catch (_error) {
+    // Nothing else to clean up.
+  }
+}
+
+function arrowRowToObject(row) {
+  return typeof row?.toJSON === 'function' ? row.toJSON() : row;
+}
+
+async function convertArrowRowsToArrayData(arrowRows, columns, firstRowObject = null) {
+  const rows = [];
+  const totalRows = arrowRows.length;
+
+  for (let i = 0; i < totalRows; i++) {
+    const rowObject = i === 0 && firstRowObject ? firstRowObject : arrowRowToObject(arrowRows[i]);
+    rows.push(columns.map(col => {
+      const value = rowObject[col];
+      return typeof value === 'bigint' ? value.toString() : value;
+    }));
+
+    if (i > 0 && i % ROW_CONVERSION_CHUNK_SIZE === 0) {
+      showLoading(true, `Membangun baris data ${i.toLocaleString('id-ID')}/${totalRows.toLocaleString('id-ID')}...`);
+      await yieldToBrowser();
+    }
+  }
+
+  return rows;
+}
+
 async function loadStatisticsDb() {
   try {
     const { arrayBuffer } = await fetchCachedArrayBuffer({
@@ -912,8 +989,8 @@ async function loadStatisticsDb() {
       name: STATS_FILENAME
     });
     await db.registerFileBuffer('temp_stats.parquet', new Uint8Array(arrayBuffer));
-    await conn.query(`DROP TABLE IF EXISTS stats_table`);
-    await conn.query(`CREATE TABLE stats_table AS SELECT * FROM read_parquet('temp_stats.parquet')`);
+    await dropDuckDbRelation('stats_table');
+    await conn.query(`CREATE VIEW stats_table AS SELECT * FROM read_parquet('temp_stats.parquet')`);
 
     isStatsLoaded = true;
   } catch (e) {
@@ -948,21 +1025,16 @@ async function autoLoadDatabase() {
     showLoading(true, `Membangun tabel data dari ${sourceLabel}...`);
 
     await db.registerFileBuffer('temp_source.parquet', new Uint8Array(arrayBuffer));
-    await conn.query(`DROP TABLE IF EXISTS my_table`);
-    await conn.query(`CREATE TABLE my_table AS SELECT * FROM read_parquet('temp_source.parquet')`);
+    await dropDuckDbRelation('my_table');
+    await conn.query(`CREATE VIEW my_table AS SELECT * FROM read_parquet('temp_source.parquet')`);
 
     const result = await conn.query(`SELECT * FROM my_table`);
-    const arrowJson = result.toArray().map(r => r.toJSON());
+    const arrowRows = result.toArray();
 
-    if (arrowJson.length > 0) {
-      dbColumns = Object.keys(arrowJson[0]);
-      allData = arrowJson.map(row => {
-        return dbColumns.map(col => {
-          let val = row[col];
-          if (typeof val === 'bigint') return val.toString();
-          return val;
-        });
-      });
+    if (arrowRows.length > 0) {
+      const firstRowObject = arrowRowToObject(arrowRows[0]);
+      dbColumns = Object.keys(firstRowObject);
+      allData = await convertArrowRowsToArrayData(arrowRows, dbColumns, firstRowObject);
     } else {
       dbColumns = [];
       allData = [];
@@ -1074,10 +1146,96 @@ function renderHeader(columns) {
   });
 }
 
-function performSearch() {
+function getCurrentSearchState(columnIndexes = getColumnIndexes()) {
   const textInput = document.getElementById('searchInput').value.toUpperCase();
   const routeInput = document.getElementById('routeSelect').value;
+  let routeDestCode = '';
+  let routeOriginCode = '';
+  let isRouteFilterActive = false;
+
+  if (routeInput && routeInput !== '') {
+    const parts = routeInput.split('|');
+    if (parts.length === 2) {
+      routeDestCode = parts[0];
+      routeOriginCode = parts[1];
+      if (columnIndexes.inaportCode !== -1 && columnIndexes.tibaDariCode !== -1) {
+        isRouteFilterActive = true;
+      }
+    }
+  }
+
+  return {
+    textInput,
+    routeInput,
+    routeDestCode,
+    routeOriginCode,
+    isRouteFilterActive
+  };
+}
+
+function doesRowMatchTextSearch(row, textInput) {
+  return textInput === '' || row.some(cell => String(cell).toUpperCase().includes(textInput));
+}
+
+function doesRowMatchRouteSearch(row, searchState, columnIndexes) {
+  if (!searchState.isRouteFilterActive) return true;
+
+  const cellInaport = String(row[columnIndexes.inaportCode] || '').toUpperCase();
+  const cellOrigin = String(row[columnIndexes.tibaDariCode] || '').toUpperCase();
+  return cellInaport === searchState.routeDestCode && cellOrigin === searchState.routeOriginCode;
+}
+
+function collectFilteredRowsAndOptions(searchState, columnIndexes, rangeFilters) {
+  const nextFilterOptions = createFilterState(() => new Set());
+  const nextFilteredData = [];
+  const activeOptionFilters = FILTER_TYPES.filter(filterType => selectedFilters[filterType].size > 0);
+
+  allData.forEach(row => {
+    if (!doesRowMatchTextSearch(row, searchState.textInput)) return;
+    if (!doesRowMatchRouteSearch(row, searchState, columnIndexes)) return;
+    if (!doesRowMatchDateFilterState(row, columnIndexes, rangeFilters)) return;
+    if (!doesRowMatchTonnageFilterState(row, columnIndexes, rangeFilters)) return;
+
+    let failedFilter = '';
+    let failedFilterCount = 0;
+
+    for (const filterType of activeOptionFilters) {
+      if (doesRowMatchOptionFilter(filterType, row, columnIndexes)) continue;
+      failedFilter = filterType;
+      failedFilterCount += 1;
+      if (failedFilterCount > 1) break;
+    }
+
+    if (failedFilterCount === 0) {
+      nextFilteredData.push(row);
+    }
+
+    FILTER_TYPES.forEach(filterType => {
+      if (failedFilterCount > 1 || (failedFilterCount === 1 && failedFilter !== filterType)) return;
+      getRowFilterValues(filterType, row, columnIndexes).forEach(value => nextFilterOptions[filterType].add(value));
+    });
+  });
+
+  return {
+    filteredRows: nextFilteredData,
+    optionSets: nextFilterOptions
+  };
+}
+
+function applyDynamicFilterOptionSets(optionSets) {
+  FILTER_TYPES.forEach(filterType => {
+    const newOptions = Array.from(optionSets[filterType]).sort((a, b) => a.localeCompare(b, 'id'));
+    filterOptions[filterType] = newOptions;
+    allFilterOptions[filterType] = [...newOptions];
+    populateExcelFilter(filterType, newOptions, newOptions.length);
+    updateFilterDisplay(filterType);
+  });
+}
+
+function performSearch() {
   const columnIndexes = getColumnIndexes();
+  const searchState = getCurrentSearchState(columnIndexes);
+  const rangeFilters = getRangeFilterState();
 
   const summaryDiv = document.getElementById('summary-stats');
   const tableWrapper = document.getElementById('table-wrapper');
@@ -1093,39 +1251,8 @@ function performSearch() {
   const statsYearElement = document.getElementById('stats-year-display');
   if (statsYearElement) statsYearElement.textContent = selectedYear;
 
-  let routeDestCode = "";
-  let routeOriginCode = "";
-  let isRouteFilterActive = false;
-
-  if (routeInput && routeInput !== "") {
-    const parts = routeInput.split('|');
-    if (parts.length === 2) {
-      routeDestCode = parts[0];
-      routeOriginCode = parts[1];
-      const idxInaport = columnIndexes.inaportCode;
-      const idxTibaDari = columnIndexes.tibaDariCode;
-      if (idxInaport !== -1 && idxTibaDari !== -1) {
-        isRouteFilterActive = true;
-      }
-    }
-  }
-
-  filteredData = allData.filter(row => {
-    const matchesText = textInput === "" || row.some(cell => String(cell).toUpperCase().includes(textInput));
-    
-    let matchesRoute = true;
-    if (isRouteFilterActive) {
-      const cellInaport = String(row[columnIndexes.inaportCode] || "").toUpperCase();
-      const cellOrigin = String(row[columnIndexes.tibaDariCode] || "").toUpperCase();
-      matchesRoute = (cellInaport === routeDestCode) && (cellOrigin === routeOriginCode);
-    }
-
-    const matchesOptionFilters = FILTER_TYPES.every(filterType => doesRowMatchOptionFilter(filterType, row, columnIndexes));
-    const matchesDateFilters = doesRowMatchDateFilters(row, columnIndexes);
-    const matchesTonnageFilters = doesRowMatchTonnageFilters(row, columnIndexes);
-
-    return matchesText && matchesRoute && matchesOptionFilters && matchesDateFilters && matchesTonnageFilters;
-  });
+  const searchResult = collectFilteredRowsAndOptions(searchState, columnIndexes, rangeFilters);
+  filteredData = searchResult.filteredRows;
 
   // Calculate statistics from filtered data
   calculateAndRenderSummary();
@@ -1142,7 +1269,7 @@ function performSearch() {
   if (tableCountEl) tableCountEl.innerText = filteredData.length;
   const exportBtn = document.getElementById('exportBtn');
   const exportTooltip = document.getElementById('exportTooltip');
-  const activeFilterCount = countActiveFilters(isRouteFilterActive);
+  const activeFilterCount = countActiveFilters(searchState.isRouteFilterActive);
   const hasFilter = activeFilterCount > 0;
   const isDisabled = !hasFilter || filteredData.length === 0;
   if (exportBtn) {
@@ -1161,7 +1288,8 @@ function performSearch() {
 
   updateActiveFilterSummary(activeFilterCount);
   updateClearFiltersButtonState(activeFilterCount);
-  renderActiveFilterChips(isRouteFilterActive);
+  applyDynamicFilterOptionSets(searchResult.optionSets);
+  renderActiveFilterChips(searchState.isRouteFilterActive);
 
   if (filteredData.length > 0) {
     tableWrapper.classList.remove('hidden');
@@ -1175,45 +1303,15 @@ function performSearch() {
       emptyState.classList.remove('hidden');
     }
   }
-
-  // Update filter options dynamically based on current filtered data
-  // This makes filters interactive - options update based on what's currently visible
-  updateDynamicFilterOptions();
 }
 
 // Update filter options dynamically based on current data and filters
 function updateDynamicFilterOptions() {
-  const textInput = document.getElementById('searchInput').value.toUpperCase();
-  const routeInput = document.getElementById('routeSelect').value;
   const columnIndexes = getColumnIndexes();
-
-  // Build base filtered data (text + route, no excel filters)
-  let baseFilteredData = allData;
-
-  // Apply text filter
-  if (textInput !== "") {
-    baseFilteredData = baseFilteredData.filter(row => 
-      row.some(cell => String(cell).toUpperCase().includes(textInput))
-    );
-  }
-
-  // Apply route filter
-  if (routeInput && routeInput !== "") {
-    const parts = routeInput.split('|');
-    if (parts.length === 2) {
-      const routeDestCode = parts[0];
-      const routeOriginCode = parts[1];
-      
-      baseFilteredData = baseFilteredData.filter(row => {
-        const cellInaport = String(row[columnIndexes.inaportCode] || "").toUpperCase();
-        const cellOrigin = String(row[columnIndexes.tibaDariCode] || "").toUpperCase();
-        return (cellInaport === routeDestCode) && (cellOrigin === routeOriginCode);
-      });
-    }
-  }
-
-  // Now update each filter's options based on the OTHER filters (not itself)
-  FILTER_TYPES.forEach(filterType => updateFilterOptionsForType(filterType, baseFilteredData, columnIndexes));
+  const searchState = getCurrentSearchState(columnIndexes);
+  const rangeFilters = getRangeFilterState();
+  const { optionSets } = collectFilteredRowsAndOptions(searchState, columnIndexes, rangeFilters);
+  applyDynamicFilterOptionSets(optionSets);
 }
 
 function updateFilterOptionsForType(filterType, baseData, columnIndexes = getColumnIndexes()) {
