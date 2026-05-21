@@ -126,7 +126,7 @@ function attachFingerprint(metadata = {}) {
   };
 }
 
-async function fetchRemoteMetadata(path) {
+export async function fetchRemoteFileMetadata(path) {
   try {
     const response = await fetch(path, { method: 'HEAD', cache: 'no-cache' });
 
@@ -193,7 +193,7 @@ export async function fetchCachedArrayBuffer(fileInfo) {
   const name = getFileName(fileInfo, path);
   const cacheKey = getCacheKey(path);
   const cachedRecord = await readCacheRecord(cacheKey);
-  const remote = await fetchRemoteMetadata(path);
+  const remote = await fetchRemoteFileMetadata(path);
 
   if (cachedRecord && canUseCachedRecord(cachedRecord, remote)) {
     const source = remote.ok ? 'cache' : 'cache-stale';
