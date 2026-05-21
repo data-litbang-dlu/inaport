@@ -1,5 +1,5 @@
 import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/+esm';
-import { fetchCachedArrayBuffer } from './browser-cache.js';
+import { fetchCachedArrayBuffer, fetchRemoteFileMetadata } from './browser-cache.js';
 
 // --- KONFIGURASI FOLDER ---
 const DB_FOLDER = './database/';
@@ -89,6 +89,7 @@ const TONNAGE_FILTER_GROUPS = {
   }
 };
 const ROW_CONVERSION_CHUNK_SIZE = 1000;
+const PARSED_DATA_CACHE_LIMIT = 2;
 
 function createFilterState(factory) {
   return Object.fromEntries(FILTER_TYPES.map(filterType => [filterType, factory(filterType)]));
@@ -153,6 +154,7 @@ let currentPage = 1;
 let rowsPerPage = 10;
 let xlsxModule = null;
 let xlsxModulePromise = null;
+let parsedDatasetCache = new Map();
 const rowDetailCache = new WeakMap();
 
 // Excel-like filter state management
@@ -962,16 +964,35 @@ function arrowRowToObject(row) {
   return typeof row?.toJSON === 'function' ? row.toJSON() : row;
 }
 
-async function convertArrowRowsToArrayData(arrowRows, columns, firstRowObject = null) {
+function arrowRowToArray(row, columns) {
+  const values = typeof row?.toArray === 'function'
+    ? row.toArray()
+    : columns.map(column => row?.[column]);
+
+  for (let i = 0; i < values.length; i++) {
+    if (typeof values[i] === 'bigint') {
+      values[i] = values[i].toString();
+    }
+  }
+
+  return values;
+}
+
+function getResultColumnNames(result, firstRow = null) {
+  const schemaFields = result?.schema?.fields;
+  if (Array.isArray(schemaFields) && schemaFields.length > 0) {
+    return schemaFields.map(field => field.name);
+  }
+
+  return firstRow ? Object.keys(arrowRowToObject(firstRow)) : [];
+}
+
+async function convertArrowRowsToArrayData(arrowRows, columns) {
   const rows = [];
   const totalRows = arrowRows.length;
 
   for (let i = 0; i < totalRows; i++) {
-    const rowObject = i === 0 && firstRowObject ? firstRowObject : arrowRowToObject(arrowRows[i]);
-    rows.push(columns.map(col => {
-      const value = rowObject[col];
-      return typeof value === 'bigint' ? value.toString() : value;
-    }));
+    rows.push(arrowRowToArray(arrowRows[i], columns));
 
     if (i > 0 && i % ROW_CONVERSION_CHUNK_SIZE === 0) {
       showLoading(true, `Membangun baris data ${i.toLocaleString('id-ID')}/${totalRows.toLocaleString('id-ID')}...`);
@@ -980,6 +1001,70 @@ async function convertArrowRowsToArrayData(arrowRows, columns, firstRowObject = 
   }
 
   return rows;
+}
+
+function getParsedDatasetCacheKey(path) {
+  return String(path || '');
+}
+
+function getMetadataFingerprint(metadata = null) {
+  return metadata?.fingerprint || '';
+}
+
+function getParsedDatasetFromCache(cacheKey, metadata = null) {
+  const cached = parsedDatasetCache.get(cacheKey);
+  if (!cached) return null;
+
+  const currentFingerprint = getMetadataFingerprint(metadata);
+  if (currentFingerprint && cached.fingerprint !== currentFingerprint) {
+    parsedDatasetCache.delete(cacheKey);
+    return null;
+  }
+
+  parsedDatasetCache.delete(cacheKey);
+  parsedDatasetCache.set(cacheKey, cached);
+  return cached;
+}
+
+async function getValidatedParsedDataset(cacheKey, path) {
+  if (!parsedDatasetCache.has(cacheKey)) return null;
+
+  const remote = await fetchRemoteFileMetadata(path);
+  if (remote.ok) {
+    return getParsedDatasetFromCache(cacheKey, remote.metadata);
+  }
+
+  if (remote.error || remote.validationUnavailable) {
+    return getParsedDatasetFromCache(cacheKey);
+  }
+
+  parsedDatasetCache.delete(cacheKey);
+  return null;
+}
+
+function rememberParsedDataset(cacheKey, columns, rows, metadata = null) {
+  parsedDatasetCache.delete(cacheKey);
+  parsedDatasetCache.set(cacheKey, {
+    columns: [...columns],
+    rows,
+    fingerprint: getMetadataFingerprint(metadata),
+    savedAt: Date.now()
+  });
+
+  while (parsedDatasetCache.size > PARSED_DATA_CACHE_LIMIT) {
+    const oldestKey = parsedDatasetCache.keys().next().value;
+    parsedDatasetCache.delete(oldestKey);
+  }
+}
+
+function applyLoadedDataset(columns, rows) {
+  dbColumns = [...columns];
+  allData = rows;
+
+  document.getElementById('controls').classList.remove('hidden');
+  document.getElementById('advanced-filters').classList.remove('hidden');
+  extractDistinctValues();
+  resetSearch();
 }
 
 async function loadStatisticsDb() {
@@ -1011,6 +1096,14 @@ async function autoLoadDatabase() {
   try {
     if (!db || !conn) return;
 
+    const parsedCacheKey = getParsedDatasetCacheKey(currentDbUrl);
+    const parsedDataset = await getValidatedParsedDataset(parsedCacheKey, currentDbUrl);
+    if (parsedDataset) {
+      showLoading(true, `Menggunakan baris data ${currentDbName} dari memori...`);
+      applyLoadedDataset(parsedDataset.columns, parsedDataset.rows);
+      return;
+    }
+
     const cachedFile = await fetchCachedArrayBuffer({
       path: currentDbUrl,
       name: currentDbName
@@ -1032,18 +1125,15 @@ async function autoLoadDatabase() {
     const arrowRows = result.toArray();
 
     if (arrowRows.length > 0) {
-      const firstRowObject = arrowRowToObject(arrowRows[0]);
-      dbColumns = Object.keys(firstRowObject);
-      allData = await convertArrowRowsToArrayData(arrowRows, dbColumns, firstRowObject);
+      dbColumns = getResultColumnNames(result, arrowRows[0]);
+      allData = await convertArrowRowsToArrayData(arrowRows, dbColumns);
     } else {
       dbColumns = [];
       allData = [];
     }
 
-    document.getElementById('controls').classList.remove('hidden');
-    document.getElementById('advanced-filters').classList.remove('hidden');
-    extractDistinctValues();
-    resetSearch();
+    rememberParsedDataset(parsedCacheKey, dbColumns, allData, cachedFile.metadata);
+    applyLoadedDataset(dbColumns, allData);
 
   } catch (err) {
     showError(`Gagal memuat data: <br>${err.message}`);
