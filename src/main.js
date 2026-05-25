@@ -640,7 +640,7 @@ function populateExcelFilter(filterType, values, totalCount = null) {
     const displayValue = getDisplayValue(filterType, value);
     const text = document.createTextNode(displayValue);
 
-    checkbox.addEventListener('change', () => handleFilterChange(filterType));
+    checkbox.addEventListener('change', () => handleFilterChange(filterType, value, checkbox.checked));
 
     // Re-check if previously selected
     if (selectedFilters[filterType].has(value)) {
@@ -666,17 +666,26 @@ function updateFilterTotalCount(filterType, total) {
 }
 
 // Handle filter change
-function handleFilterChange(filterType) {
+function handleFilterChange(filterType, changedValue = null, isChecked = null) {
   const optionsContainer = document.getElementById(getFilterDomId(filterType, 'Options'));
   if (!optionsContainer) return;
-  const checkboxes = optionsContainer.querySelectorAll('input[type="checkbox"]');
 
-  selectedFilters[filterType].clear();
-  checkboxes.forEach(cb => {
-    if (cb.checked) {
-      selectedFilters[filterType].add(cb.value);
+  if (changedValue !== null) {
+    if (isChecked) {
+      selectedFilters[filterType].add(changedValue);
+    } else {
+      selectedFilters[filterType].delete(changedValue);
     }
-  });
+  } else {
+    const checkboxes = optionsContainer.querySelectorAll('input[type="checkbox"]');
+    checkboxes.forEach(cb => {
+      if (cb.checked) {
+        selectedFilters[filterType].add(cb.value);
+      } else {
+        selectedFilters[filterType].delete(cb.value);
+      }
+    });
+  }
 
   updateFilterDisplay(filterType);
   performSearch();
