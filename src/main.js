@@ -1605,20 +1605,21 @@ async function exportFilteredToXLSX() {
       [],
       ['RINGKASAN', 'Nilai'],
       ['Jumlah Data', filteredData.length],
-      ['Tonase Komoditi (TON)', document.getElementById('stat-ton-bongkar')?.textContent || '0'],
+      ['Total Komoditi Bongkar (TON)', document.getElementById('stat-ton-bongkar-total')?.textContent || '0'],
+      ['Total Komoditi Bongkar Selain Kendaraan (TON)', document.getElementById('stat-ton-bongkar')?.textContent || '0'],
       [],
-      ['KENDARAAN', 'Unit'],
-      ['Sepeda Motor', document.getElementById('stat-motor')?.textContent || '0'],
-      ['Mobil', document.getElementById('stat-mobil')?.textContent || '0'],
-      ['Truk Sedang', document.getElementById('stat-truk-sedang')?.textContent || '0'],
-      ['Truk Besar', document.getElementById('stat-truk-besar')?.textContent || '0'],
-      ['Tronton', document.getElementById('stat-tronton')?.textContent || '0'],
-      ['Alat Berat', document.getElementById('stat-alat-berat')?.textContent || '0'],
-      ['Trailer', document.getElementById('stat-trailer')?.textContent || '0']
+      ['KENDARAAN', 'Unit', 'Ton'],
+      ['Sepeda Motor', document.getElementById('stat-motor')?.textContent || '0', document.getElementById('stat-motor-ton')?.textContent || '0'],
+      ['Mobil', document.getElementById('stat-mobil')?.textContent || '0', document.getElementById('stat-mobil-ton')?.textContent || '0'],
+      ['Truk Sedang', document.getElementById('stat-truk-sedang')?.textContent || '0', document.getElementById('stat-truk-sedang-ton')?.textContent || '0'],
+      ['Truk Besar', document.getElementById('stat-truk-besar')?.textContent || '0', document.getElementById('stat-truk-besar-ton')?.textContent || '0'],
+      ['Tronton', document.getElementById('stat-tronton')?.textContent || '0', document.getElementById('stat-tronton-ton')?.textContent || '0'],
+      ['Alat Berat', document.getElementById('stat-alat-berat')?.textContent || '0', document.getElementById('stat-alat-berat-ton')?.textContent || '0'],
+      ['Trailer', document.getElementById('stat-trailer')?.textContent || '0', document.getElementById('stat-trailer-ton')?.textContent || '0']
     ];
 
     const statsWorksheet = XLSX.utils.aoa_to_sheet(statsData);
-    statsWorksheet['!cols'] = [{ wch: 25 }, { wch: 30 }];
+    statsWorksheet['!cols'] = [{ wch: 45 }, { wch: 18 }, { wch: 18 }];
     XLSX.utils.book_append_sheet(workbook, statsWorksheet, 'Statistik');
 
     const safeRoute = routeLabel
@@ -1639,8 +1640,12 @@ function calculateAndRenderSummary() {
   const mapping = {
     'stat-motor': 'SEPEDA MOTOR', 'stat-mobil': 'MOBIL', 'stat-truk-sedang': 'TRUK SEDANG',
     'stat-truk-besar': 'TRUK BESAR', 'stat-tronton': 'TRONTON', 'stat-trailer': 'TRAILER',
-    'stat-alat-berat': 'ALAT BERAT', 'stat-ton-bongkar': 'TONASE KOMODITI BONGKAR',
-    'stat-ton-kendaraan': 'TONASE KENDARAAN'
+    'stat-alat-berat': 'ALAT BERAT', 'stat-ton-bongkar-total': 'TOTAL TONASE KOMODITI BONGKAR',
+    'stat-ton-bongkar': 'TONASE KOMODITI BONGKAR', 'stat-ton-kendaraan': 'TONASE KENDARAAN',
+    'stat-motor-ton': 'TONASE SEPEDA MOTOR', 'stat-mobil-ton': 'TONASE MOBIL',
+    'stat-truk-sedang-ton': 'TONASE TRUK SEDANG', 'stat-truk-besar-ton': 'TONASE TRUK BESAR',
+    'stat-tronton-ton': 'TONASE TRONTON', 'stat-trailer-ton': 'TONASE TRAILER',
+    'stat-alat-berat-ton': 'TONASE ALAT BERAT'
   };
   const fmt = (n) => n ? Number(n).toLocaleString('id-ID') : '0';
 
@@ -1729,9 +1734,17 @@ function calculateAndRenderSummary() {
   let stats = {
     'stat-motor': 0, 'stat-mobil': 0, 'stat-truk-sedang': 0,
     'stat-truk-besar': 0, 'stat-tronton': 0, 'stat-trailer': 0,
-    'stat-alat-berat': 0, 'stat-ton-bongkar': 0, 'stat-ton-kendaraan': 0
+    'stat-alat-berat': 0, 'stat-ton-bongkar-total': 0, 'stat-ton-bongkar': 0, 'stat-ton-kendaraan': 0,
+    'stat-motor-ton': 0, 'stat-mobil-ton': 0, 'stat-truk-sedang-ton': 0,
+    'stat-truk-besar-ton': 0, 'stat-tronton-ton': 0, 'stat-trailer-ton': 0,
+    'stat-alat-berat-ton': 0
   };
   let totalBongkarTonase = 0; // ALL bongkar tonnage from filtered data
+  const addVehicleStats = (unitKey, tonKey, unit, tonase) => {
+    stats[unitKey] += unit;
+    stats[tonKey] += tonase;
+    stats['stat-ton-kendaraan'] += tonase;
+  };
 
   // Get column indices
   const detailColIndex = dbColumns.findIndex(col =>
@@ -1767,32 +1780,26 @@ function calculateAndRenderSummary() {
       // Only count vehicles if JENIS KAPAL and JENIS BONGKAR are valid
       if (isValidJenisKapal && VALID_JENIS_BONGKAR.includes(jenisBongkar)) {
         if (SEPEDA_MOTOR.includes(komoditi)) {
-          stats['stat-motor'] += unit;
-          stats['stat-ton-kendaraan'] += tonase;
+          addVehicleStats('stat-motor', 'stat-motor-ton', unit, tonase);
         } else if (MOBIL.includes(komoditi)) {
-          stats['stat-mobil'] += unit;
-          stats['stat-ton-kendaraan'] += tonase;
+          addVehicleStats('stat-mobil', 'stat-mobil-ton', unit, tonase);
         } else if (TRUK_SEDANG.includes(komoditi)) {
-          stats['stat-truk-sedang'] += unit;
-          stats['stat-ton-kendaraan'] += tonase;
+          addVehicleStats('stat-truk-sedang', 'stat-truk-sedang-ton', unit, tonase);
         } else if (TRUK_BESAR.includes(komoditi)) {
-          stats['stat-truk-besar'] += unit;
-          stats['stat-ton-kendaraan'] += tonase;
+          addVehicleStats('stat-truk-besar', 'stat-truk-besar-ton', unit, tonase);
         } else if (TRONTON.includes(komoditi)) {
-          stats['stat-tronton'] += unit;
-          stats['stat-ton-kendaraan'] += tonase;
+          addVehicleStats('stat-tronton', 'stat-tronton-ton', unit, tonase);
         } else if (ALAT_BERAT.includes(komoditi)) {
-          stats['stat-alat-berat'] += unit;
-          stats['stat-ton-kendaraan'] += tonase;
+          addVehicleStats('stat-alat-berat', 'stat-alat-berat-ton', unit, tonase);
         } else if (TRAILER.includes(komoditi)) {
-          stats['stat-trailer'] += unit;
-          stats['stat-ton-kendaraan'] += tonase;
+          addVehicleStats('stat-trailer', 'stat-trailer-ton', unit, tonase);
         }
       }
     });
   });
 
-  // TONASE KOMODITI = ALL bongkar tonnage - vehicle tonnage
+  // Total bongkar includes vehicles; existing komoditi figure excludes vehicle tonnage.
+  stats['stat-ton-bongkar-total'] = totalBongkarTonase;
   stats['stat-ton-bongkar'] = totalBongkarTonase - stats['stat-ton-kendaraan'];
 
   // Update UI
