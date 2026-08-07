@@ -1620,6 +1620,7 @@ async function exportFilteredToXLSX() {
       ['KENDARAAN', 'Unit', 'Ton'],
       ['Sepeda Motor', document.getElementById('stat-motor')?.textContent || '0', document.getElementById('stat-motor-ton')?.textContent || '0'],
       ['Mobil', document.getElementById('stat-mobil')?.textContent || '0', document.getElementById('stat-mobil-ton')?.textContent || '0'],
+      ['Truk Kecil', document.getElementById('stat-truk-kecil')?.textContent || '0', document.getElementById('stat-truk-kecil-ton')?.textContent || '0'],
       ['Truk Sedang', document.getElementById('stat-truk-sedang')?.textContent || '0', document.getElementById('stat-truk-sedang-ton')?.textContent || '0'],
       ['Truk Besar', document.getElementById('stat-truk-besar')?.textContent || '0', document.getElementById('stat-truk-besar-ton')?.textContent || '0'],
       ['Tronton', document.getElementById('stat-tronton')?.textContent || '0', document.getElementById('stat-tronton-ton')?.textContent || '0'],
@@ -1647,11 +1648,11 @@ async function exportFilteredToXLSX() {
 
 function calculateAndRenderSummary() {
   const mapping = {
-    'stat-motor': 'SEPEDA MOTOR', 'stat-mobil': 'MOBIL', 'stat-truk-sedang': 'TRUK SEDANG',
+    'stat-motor': 'SEPEDA MOTOR', 'stat-mobil': 'MOBIL', 'stat-truk-kecil': 'TRUK KECIL', 'stat-truk-sedang': 'TRUK SEDANG',
     'stat-truk-besar': 'TRUK BESAR', 'stat-tronton': 'TRONTON', 'stat-trailer': 'TRAILER',
     'stat-alat-berat': 'ALAT BERAT', 'stat-ton-bongkar-total': 'TOTAL TONASE KOMODITI BONGKAR',
     'stat-ton-bongkar': 'TONASE KOMODITI BONGKAR', 'stat-ton-kendaraan': 'TONASE KENDARAAN',
-    'stat-motor-ton': 'TONASE SEPEDA MOTOR', 'stat-mobil-ton': 'TONASE MOBIL',
+    'stat-motor-ton': 'TONASE SEPEDA MOTOR', 'stat-mobil-ton': 'TONASE MOBIL', 'stat-truk-kecil-ton': 'TONASE TRUK KECIL',
     'stat-truk-sedang-ton': 'TONASE TRUK SEDANG', 'stat-truk-besar-ton': 'TONASE TRUK BESAR',
     'stat-tronton-ton': 'TONASE TRONTON', 'stat-trailer-ton': 'TONASE TRAILER',
     'stat-alat-berat-ton': 'TONASE ALAT BERAT'
@@ -1676,9 +1677,12 @@ function calculateAndRenderSummary() {
     'CAMRY/PAJERO/ALPHARD >1500CC (GOL III.B', 'SEDAN/JEEP/MINIBUS s/d 2000CC (GOL III.A)',
     'CAMRY/PAJERO/ALPHARD >2000CC (GOL III.B', 'Gol IV A - Sedan, Jeep dan sejenisnya', 'Gol IV B - Kendaraan Kecil Barang', 'Kendaraan Golongan III', 'KENDARAAAN BERMOTOR RODA EMPAT', 'KENDARAAN BERMOTOR RODA EMPAT'
   ];
+  const TRUK_KECIL = [
+    'TRUK KECIL', 'Truk Kecil', 'TRUK ECIL', 'TRUCK KECIL', 'Truck Kecil', 'Truck Kecil Besar'
+  ];
   const TRUK_SEDANG = [
-    'TRUK DUTRO', 'TRUK SEDANG 16 s/d 20 TON/M3 (PENUMPANG)', 'TRUK SEDANG', 'Truk sedang', 'TRUK KECIL', 'Truk Kecil', 'TRUK FUSO',
-    'TRUK PS', 'GOL V BRG - TRUK SEDANG', 'TRUK TS', 'TRUK ECIL', 'MOBIL TRUCK', 'TRUK SEDANG LONG CHASIS MAX 8M (GOL IV.B)',
+    'TRUK DUTRO', 'TRUK SEDANG 16 s/d 20 TON/M3 (PENUMPANG)', 'TRUK SEDANG', 'Truk sedang', 'TRUK FUSO',
+    'TRUK PS', 'GOL V BRG - TRUK SEDANG', 'TRUK TS', 'MOBIL TRUCK', 'TRUK SEDANG LONG CHASIS MAX 8M (GOL IV.B)',
     'TRUK SEDANG LONG CHASIS MAX 8M (GOL IV.B) ISI', 'Truk Sedang', 'Gol V B - Truk Sedang', 'Truk dan Bus 28 s/d 33 Ton/M3 (VHC)',
     'Truk dan Bus < 28 Ton/M3 (VHC)', 'KENDARAAN GOLONGAN IV', 'kendaraan gol IV', 'KENDARAAN GOL IV', 'GOL V PNP - BUS SEDANG',
     'GOL V PNP - BUS KECIL', 'KENDARAAN GOLOGNGAN IV', 'KENDARAAAN GOLONGAN IV', 'KENDARAAN GOL IVB', 'KENDARAAN GOL IVA',
@@ -1686,8 +1690,8 @@ function calculateAndRenderSummary() {
     'TRUK/BUS SEDANG MAX 6M (GOL IV.A)', 'TRUK/BUS SEDANG MAX 6M (GOL IV.A', 'KENDARAAN GOLONGAN IVA', 'KENDARAAN GOLONGAN IVB',
     'KENDARAAN GOLONGAN  IV', 'Kendaraan golongan IV', 'kendaraan gol iv', '"TRUK/BUS SEDANG MAX 6M (GOL IV.A) ISI"',
     'TRUK/BUS SEDANG MAX 6M (GOL IV.A) Isi', 'TRUK/BUS SEDANG MAX 6M (GOL IV.A) IS', 'Kendaraan Golongan IV', 'MOBILTRUK/BUS',
-    'TRUK/BUS SEDANG (4-6 RODA)', 'TRUK', 'TRUKFUSO', 'TRUCK SEDANG', 'TRUCK', 'TRUCK KECIL', 'Truck Sedang', 'TRUCK BEKAS',
-    'TRUCK SEDANG 4 RODA', 'TRUCK SEDANG 6 RODA', 'TRUCK BOX', 'Truck Kecil', 'Truck Kecil Besar'
+    'TRUK/BUS SEDANG (4-6 RODA)', 'TRUK', 'TRUKFUSO', 'TRUCK SEDANG', 'TRUCK', 'Truck Sedang', 'TRUCK BEKAS',
+    'TRUCK SEDANG 4 RODA', 'TRUCK SEDANG 6 RODA', 'TRUCK BOX'
   ];
   const TRUK_BESAR = [
     'DUMP TRUCK', 'DUMP TRUCK MIXER', 'DUMP TRUCK SANY', 'TRUK BESAR', 'DUMP TRUCK KOMATSU', 'DUMP TRUK KOMATSU 400', 'DUMP TRUK KOMATSU MDL HD785-7 & GENERAL CARGO',
@@ -1741,10 +1745,10 @@ function calculateAndRenderSummary() {
 
   // Initialize counters
   let stats = {
-    'stat-motor': 0, 'stat-mobil': 0, 'stat-truk-sedang': 0,
+    'stat-motor': 0, 'stat-mobil': 0, 'stat-truk-kecil': 0, 'stat-truk-sedang': 0,
     'stat-truk-besar': 0, 'stat-tronton': 0, 'stat-trailer': 0,
     'stat-alat-berat': 0, 'stat-ton-bongkar-total': 0, 'stat-ton-bongkar': 0, 'stat-ton-kendaraan': 0,
-    'stat-motor-ton': 0, 'stat-mobil-ton': 0, 'stat-truk-sedang-ton': 0,
+    'stat-motor-ton': 0, 'stat-mobil-ton': 0, 'stat-truk-kecil-ton': 0, 'stat-truk-sedang-ton': 0,
     'stat-truk-besar-ton': 0, 'stat-tronton-ton': 0, 'stat-trailer-ton': 0,
     'stat-alat-berat-ton': 0
   };
@@ -1792,6 +1796,8 @@ function calculateAndRenderSummary() {
           addVehicleStats('stat-motor', 'stat-motor-ton', unit, tonase);
         } else if (MOBIL.includes(komoditi)) {
           addVehicleStats('stat-mobil', 'stat-mobil-ton', unit, tonase);
+        } else if (TRUK_KECIL.includes(komoditi)) {
+          addVehicleStats('stat-truk-kecil', 'stat-truk-kecil-ton', unit, tonase);
         } else if (TRUK_SEDANG.includes(komoditi)) {
           addVehicleStats('stat-truk-sedang', 'stat-truk-sedang-ton', unit, tonase);
         } else if (TRUK_BESAR.includes(komoditi)) {
