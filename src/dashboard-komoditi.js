@@ -178,6 +178,32 @@ function formatNumber(value, fractionDigits = 2) {
   });
 }
 
+function roundNumber(value, fractionDigits = 2) {
+  const numeric = Number(value || 0);
+  if (!Number.isFinite(numeric)) return 0;
+
+  const multiplier = 10 ** fractionDigits;
+  return Math.round((numeric + Number.EPSILON) * multiplier) / multiplier;
+}
+
+function getTripTonByDirection(trip, direction = 'ALL') {
+  if (direction === 'BONGKAR') return trip.bongkarTon;
+  if (direction === 'MUAT') return trip.muatTon;
+  return trip.bongkarTon + trip.muatTon;
+}
+
+function getTripTonBreakdownByDirection(trips = [], direction = 'ALL') {
+  return trips.reduce((totals, trip) => {
+    if (direction !== 'MUAT') {
+      totals.bongkar += trip.bongkarTon;
+    }
+    if (direction !== 'BONGKAR') {
+      totals.muat += trip.muatTon;
+    }
+    return totals;
+  }, { bongkar: 0, muat: 0 });
+}
+
 function appendItems(target, source) {
   for (let i = 0; i < source.length; i++) {
     target.push(source[i]);
@@ -777,7 +803,7 @@ function buildYearAxis(yearStart, yearEnd) {
   return years;
 }
 
-function aggregateYearly(filteredTrips, commodityRows, yearAxis, metric) {
+function aggregateYearly(filteredTrips, commodityRows, yearAxis, metric, direction = 'ALL') {
   const yearMap = new Map();
 
   const ensureYear = (year) => {
@@ -799,11 +825,16 @@ function aggregateYearly(filteredTrips, commodityRows, yearAxis, metric) {
   filteredTrips.forEach(trip => {
     const bucket = ensureYear(trip.year);
     bucket.tripCount += 1;
+    if (metric === 'ton') {
+      bucket.ton += getTripTonByDirection(trip, direction);
+    }
   });
 
   commodityRows.forEach(item => {
     const bucket = ensureYear(item.year);
-    bucket.ton += item.ton;
+    if (metric !== 'ton') {
+      bucket.ton += item.ton;
+    }
     bucket.unit += item.unit;
     bucket.commoditySet.add(item.commodity);
 
@@ -1030,6 +1061,8 @@ function renderComparisonChart(commodityRows, yearlyData, yearAxis, filters) {
   const emptyEl = byId('comparisonChartEmpty');
   const canvas = byId('comparisonChart');
 
+  if (!emptyEl || !canvas) return;
+
   if (comparisonChart) {
     comparisonChart.destroy();
     comparisonChart = null;
@@ -1150,6 +1183,8 @@ function renderTrendChart(yearlyData, yearAxis, filters) {
   const emptyEl = byId('trendChartEmpty');
   const canvas = byId('trendLineChart');
 
+  if (!emptyEl || !canvas) return;
+
   if (trendLineChart) {
     trendLineChart.destroy();
     trendLineChart = null;
@@ -1242,7 +1277,7 @@ function renderTrendChart(yearlyData, yearAxis, filters) {
 }
 
 function updateSummary(filteredTrips, commodityRows, yearlyData, filters) {
-  const totalTon = commodityRows.reduce((acc, item) => acc + item.ton, 0);
+  const totalTonBreakdown = getTripTonBreakdownByDirection(filteredTrips, filters.direction);
   const totalTrips = filteredTrips.length;
   const uniqueCommodities = new Set(commodityRows.map(item => item.commodity)).size;
   const uniqueShips = new Set(filteredTrips.map(trip => normalizeLabel(trip.kapal, 'Tanpa Nama Kapal'))).size;
@@ -1256,7 +1291,8 @@ function updateSummary(filteredTrips, commodityRows, yearlyData, filters) {
     byId('summaryYearCoverage').textContent = '-';
   }
 
-  byId('summaryTotalTon').textContent = formatNumber(totalTon);
+  byId('summaryTotalBongkarTon').textContent = formatNumber(totalTonBreakdown.bongkar);
+  byId('summaryTotalMuatTon').textContent = formatNumber(totalTonBreakdown.muat);
   byId('summaryTotalTrips').textContent = formatNumber(totalTrips, 0);
 
   const activeYearRows = yearlyData.filter(item => item.tripCount > 0 || item.ton > 0 || item.unit > 0).length;
@@ -1304,6 +1340,8 @@ function updateActiveFilterSummary(filters) {
 
 async function exportSnapshotToExcel(datasetType) {
   try {
+    applyFiltersAndRenderImmediate();
+
     const filters = currentExportSnapshots.filters || getSimpleFilterState();
     const activeFilterCount = countActiveFilters(filters);
     if (activeFilterCount === 0) {
@@ -1367,7 +1405,7 @@ function applyFiltersAndRenderImmediate() {
 
   const { filteredTrips, commodityRows } = applyAllFilters(filters);
   const yearAxis = buildYearAxis(filters.yearStart, filters.yearEnd);
-  const yearlyData = aggregateYearly(filteredTrips, commodityRows, yearAxis, filters.metric);
+  const yearlyData = aggregateYearly(filteredTrips, commodityRows, yearAxis, filters.metric, filters.direction);
   const shipTripStats = buildShipTripStats(filteredTrips);
   setCurrentExportSnapshots({ filters, yearAxis, filteredTrips, commodityRows, yearlyData, shipTripStats });
 
@@ -1691,7 +1729,7 @@ function mapYearlyDataForExport(yearlyData = []) {
   return yearlyData.map(item => ({
     Tahun: item.year,
     Trip: item.tripCount,
-    Tonase: item.ton,
+    Tonase: roundNumber(item.ton),
     Unit: item.unit,
     'Komoditi Unik': item.commoditySet?.size || 0
   }));
