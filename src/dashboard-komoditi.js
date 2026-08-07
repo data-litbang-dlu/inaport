@@ -13,6 +13,17 @@ const COLOR_PALETTE = [
   '#2563eb', '#0ea5e9', '#14b8a6', '#22c55e', '#84cc16', '#f59e0b', '#ef4444', '#e11d48',
   '#9333ea', '#6366f1', '#06b6d4', '#10b981', '#f97316', '#8b5cf6', '#3b82f6', '#0f766e'
 ];
+const CHART_TON_MODE_LABELS = {
+  total: 'Total Tonase',
+  bongkar: 'Bongkar',
+  muat: 'Muat',
+  both: 'Bongkar + Muat'
+};
+const CHART_TON_MODES = new Set(Object.keys(CHART_TON_MODE_LABELS));
+const DIRECTION_LABELS = {
+  BONGKAR: 'Bongkar',
+  MUAT: 'Muat'
+};
 
 const FILTER_META = {
   commodity: {
@@ -216,6 +227,16 @@ function truncateText(text, maxLength = 24) {
   return `${value.slice(0, maxLength - 3)}...`;
 }
 
+function hexToRgba(hex, alpha = 1) {
+  const sanitized = String(hex || '').replace('#', '');
+  if (sanitized.length !== 6) return `rgba(37, 99, 235, ${alpha})`;
+
+  const red = parseInt(sanitized.slice(0, 2), 16);
+  const green = parseInt(sanitized.slice(2, 4), 16);
+  const blue = parseInt(sanitized.slice(4, 6), 16);
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
 function sanitizeFilePart(value, fallback = 'data') {
   const sanitized = String(value || '')
     .trim()
@@ -255,6 +276,32 @@ function showError(message = '') {
 function setFieldValue(id, value) {
   const el = byId(id);
   if (el) el.value = value;
+}
+
+function getChartTonMode() {
+  const selectedMode = document.querySelector('input[name="chartTonMode"]:checked')?.value || 'total';
+  return CHART_TON_MODES.has(selectedMode) ? selectedMode : 'total';
+}
+
+function setChartTonMode(value) {
+  const mode = CHART_TON_MODES.has(value) ? value : 'total';
+  const input = document.querySelector(`input[name="chartTonMode"][value="${mode}"]`);
+  if (input) input.checked = true;
+}
+
+function syncChartTonModeControls(metric) {
+  const disabled = metric !== 'ton';
+  const control = byId('chartTonModeControl');
+  const inputs = document.querySelectorAll('input[name="chartTonMode"]');
+
+  if (control) {
+    control.classList.toggle('is-disabled', disabled);
+    control.setAttribute('aria-disabled', String(disabled));
+  }
+
+  inputs.forEach(input => {
+    input.disabled = disabled;
+  });
 }
 
 function setApplyFilterIndicator(isApplying) {
@@ -680,6 +727,7 @@ function getSimpleFilterState() {
     yearEnd: Number(byId('yearEnd')?.value || defaultYearEnd || 0),
     direction: byId('directionFilter')?.value || 'ALL',
     metric: byId('metricFilter')?.value || 'ton',
+    chartTonMode: getChartTonMode(),
     topN: Number(byId('topNFilter')?.value || 8),
     tibaStart: byId('tanggalTibaStart')?.value || '',
     tibaEnd: byId('tanggalTibaEnd')?.value || '',
@@ -1025,10 +1073,20 @@ function registerShipTripPaginationEvents() {
   }
 }
 
-function buildCommodityBarDatasets(commodityRows, yearAxis, metric, topN) {
+function getBarDirectionsForChartMode(chartTonMode) {
+  if (chartTonMode === 'bongkar') return ['BONGKAR'];
+  if (chartTonMode === 'muat') return ['MUAT'];
+  if (chartTonMode === 'both') return ['BONGKAR', 'MUAT'];
+  return [];
+}
+
+function buildCommodityBarDatasets(commodityRows, yearAxis, metric, topN, chartTonMode = 'total') {
+  const activeChartTonMode = metric === 'ton' ? chartTonMode : 'total';
+  const selectedDirections = getBarDirectionsForChartMode(activeChartTonMode);
   const totalByCommodity = new Map();
 
   commodityRows.forEach(item => {
+    if (selectedDirections.length > 0 && !selectedDirections.includes(item.direction)) return;
     const value = metric === 'ton' ? item.ton : item.unit;
     totalByCommodity.set(item.commodity, (totalByCommodity.get(item.commodity) || 0) + value);
   });
@@ -1041,10 +1099,33 @@ function buildCommodityBarDatasets(commodityRows, yearAxis, metric, topN) {
   const yearCommodityMap = new Map();
   commodityRows.forEach(item => {
     if (!topCommodities.includes(item.commodity)) return;
+    if (selectedDirections.length > 0 && !selectedDirections.includes(item.direction)) return;
     const value = metric === 'ton' ? item.ton : item.unit;
-    const key = `${item.year}|${item.commodity}`;
+    const key = selectedDirections.length > 0
+      ? `${item.year}|${item.commodity}|${item.direction}`
+      : `${item.year}|${item.commodity}`;
     yearCommodityMap.set(key, (yearCommodityMap.get(key) || 0) + value);
   });
+
+  if (selectedDirections.length > 0) {
+    return topCommodities.flatMap((commodity, index) => {
+      const baseColor = COLOR_PALETTE[index % COLOR_PALETTE.length];
+      return selectedDirections.map(direction => ({
+        type: 'bar',
+        label: selectedDirections.length === 1 ? commodity : `${commodity} - ${DIRECTION_LABELS[direction]}`,
+        data: yearAxis.map(year => yearCommodityMap.get(`${year}|${commodity}|${direction}`) || 0),
+        backgroundColor: selectedDirections.length === 1
+          ? baseColor
+          : hexToRgba(baseColor, direction === 'BONGKAR' ? 0.88 : 0.42),
+        borderColor: selectedDirections.length === 1 ? baseColor : hexToRgba(baseColor, 0.95),
+        borderWidth: selectedDirections.length === 1 ? 0 : 1,
+        borderRadius: 5,
+        borderSkipped: false,
+        stack: selectedDirections.length === 1 ? undefined : commodity,
+        yAxisID: 'yMetric'
+      }));
+    });
+  }
 
   return topCommodities.map((commodity, index) => ({
     type: 'bar',
@@ -1055,6 +1136,50 @@ function buildCommodityBarDatasets(commodityRows, yearAxis, metric, topN) {
     borderSkipped: false,
     yAxisID: 'yMetric'
   }));
+}
+
+function buildTonTrendDatasets(commodityRows, yearAxis, chartTonMode = 'total') {
+  const selectedDirections = getBarDirectionsForChartMode(chartTonMode);
+  const directions = selectedDirections.length > 0 ? selectedDirections : ['TOTAL'];
+  const styleByDirection = {
+    TOTAL: {
+      label: 'Tren Total Tonase',
+      borderColor: '#0f766e',
+      backgroundColor: 'rgba(15, 118, 110, 0.14)'
+    },
+    BONGKAR: {
+      label: 'Tren Bongkar',
+      borderColor: '#0f766e',
+      backgroundColor: 'rgba(15, 118, 110, 0.12)'
+    },
+    MUAT: {
+      label: 'Tren Muat',
+      borderColor: '#f97316',
+      backgroundColor: 'rgba(249, 115, 22, 0.12)'
+    }
+  };
+
+  return directions.map(direction => {
+    const totalByYear = new Map(yearAxis.map(year => [year, 0]));
+
+    commodityRows.forEach(item => {
+      if (direction !== 'TOTAL' && item.direction !== direction) return;
+      totalByYear.set(item.year, (totalByYear.get(item.year) || 0) + item.ton);
+    });
+
+    const style = styleByDirection[direction];
+    return {
+      type: 'line',
+      label: style.label,
+      data: yearAxis.map(year => totalByYear.get(year) || 0),
+      borderColor: style.borderColor,
+      backgroundColor: style.backgroundColor,
+      borderWidth: 2.5,
+      pointRadius: 3,
+      tension: 0.25,
+      yAxisID: 'yMetric'
+    };
+  });
 }
 
 function renderComparisonChart(commodityRows, yearlyData, yearAxis, filters) {
@@ -1077,24 +1202,14 @@ function renderComparisonChart(commodityRows, yearlyData, yearAxis, filters) {
   emptyEl.classList.add('hidden');
 
   const metricLabel = filters.metric === 'ton' ? 'Tonase (Ton)' : 'Unit';
-  const barDatasets = buildCommodityBarDatasets(commodityRows, yearAxis, filters.metric, filters.topN);
-  const totalMetricData = yearlyData.map(item => (filters.metric === 'ton' ? item.ton : item.unit));
+  const barDatasets = buildCommodityBarDatasets(commodityRows, yearAxis, filters.metric, filters.topN, filters.chartTonMode);
+  const useStackedBars = filters.metric === 'ton' && filters.chartTonMode === 'both';
   const totalTripData = yearlyData.map(item => item.tripCount);
 
   const datasets = [...barDatasets];
 
   if (filters.metric === 'ton') {
-    datasets.push({
-      type: 'line',
-      label: `Tren Total ${metricLabel}`,
-      data: totalMetricData,
-      borderColor: '#0f766e',
-      backgroundColor: 'rgba(15, 118, 110, 0.14)',
-      borderWidth: 2.5,
-      pointRadius: 3,
-      tension: 0.25,
-      yAxisID: 'yMetric'
-    });
+    datasets.push(...buildTonTrendDatasets(commodityRows, yearAxis, filters.chartTonMode));
   }
 
   datasets.push({
@@ -1146,6 +1261,7 @@ function renderComparisonChart(commodityRows, yearlyData, yearAxis, filters) {
         yMetric: {
           beginAtZero: true,
           position: 'left',
+          stacked: useStackedBars,
           title: {
             display: true,
             text: metricLabel
@@ -1169,6 +1285,7 @@ function renderComparisonChart(commodityRows, yearlyData, yearAxis, filters) {
           }
         },
         x: {
+          stacked: useStackedBars,
           title: {
             display: true,
             text: 'Tahun'
@@ -1179,7 +1296,7 @@ function renderComparisonChart(commodityRows, yearlyData, yearAxis, filters) {
   });
 }
 
-function renderTrendChart(yearlyData, yearAxis, filters) {
+function renderTrendChart(commodityRows, yearlyData, yearAxis, filters) {
   const emptyEl = byId('trendChartEmpty');
   const canvas = byId('trendLineChart');
 
@@ -1199,26 +1316,32 @@ function renderTrendChart(yearlyData, yearAxis, filters) {
   emptyEl.classList.add('hidden');
 
   const metricLabel = filters.metric === 'ton' ? 'Tonase (Ton)' : 'Unit';
-  const metricSeries = yearlyData.map(item => (filters.metric === 'ton' ? item.ton : item.unit));
   const tripSeries = yearlyData.map(item => item.tripCount);
+  const metricDatasets = filters.metric === 'ton'
+    ? buildTonTrendDatasets(commodityRows, yearAxis, filters.chartTonMode).map(dataset => ({
+      ...dataset,
+      pointHoverRadius: 5,
+      fill: dataset.label === 'Tren Total Tonase'
+    }))
+    : [{
+      label: `Total ${metricLabel}`,
+      data: yearlyData.map(item => item.unit),
+      borderColor: '#1d4ed8',
+      backgroundColor: 'rgba(29, 78, 216, 0.12)',
+      borderWidth: 2.5,
+      pointRadius: 3,
+      pointHoverRadius: 5,
+      tension: 0.3,
+      fill: true,
+      yAxisID: 'yMetric'
+    }];
 
   trendLineChart = new window.Chart(canvas, {
     type: 'line',
     data: {
       labels: yearAxis,
       datasets: [
-        {
-          label: `Total ${metricLabel}`,
-          data: metricSeries,
-          borderColor: '#1d4ed8',
-          backgroundColor: 'rgba(29, 78, 216, 0.12)',
-          borderWidth: 2.5,
-          pointRadius: 3,
-          pointHoverRadius: 5,
-          tension: 0.3,
-          fill: true,
-          yAxisID: 'yMetric'
-        },
+        ...metricDatasets,
         {
           label: 'Jumlah Trip',
           data: tripSeries,
@@ -1296,7 +1419,8 @@ function updateSummary(filteredTrips, commodityRows, yearlyData, filters) {
   byId('summaryTotalTrips').textContent = formatNumber(totalTrips, 0);
 
   const activeYearRows = yearlyData.filter(item => item.tripCount > 0 || item.ton > 0 || item.unit > 0).length;
-  byId('chartMeta').textContent = `${uniqueCommodities} komoditi unik | ${uniqueShips} kapal | ${activeYearRows} tahun aktif`;
+  const chartModeLabel = filters.metric === 'ton' ? CHART_TON_MODE_LABELS[filters.chartTonMode] || CHART_TON_MODE_LABELS.total : 'Unit';
+  byId('chartMeta').textContent = `${uniqueCommodities} komoditi unik | ${uniqueShips} kapal | ${activeYearRows} tahun aktif | Bar: ${chartModeLabel}`;
 }
 
 function countActiveFilters(filters) {
@@ -1397,6 +1521,7 @@ async function exportSnapshotToExcel(datasetType) {
 
 function applyFiltersAndRenderImmediate() {
   const filters = getSimpleFilterState();
+  syncChartTonModeControls(filters.metric);
 
   if (filters.yearStart && filters.yearEnd && filters.yearStart > filters.yearEnd) {
     filters.yearEnd = filters.yearStart;
@@ -1413,7 +1538,7 @@ function applyFiltersAndRenderImmediate() {
   renderYearlyTable(yearlyData, filters.metric);
   renderShipTripTable(shipTripStats, { resetPage: true, years: yearAxis });
   renderComparisonChart(commodityRows, yearlyData, yearAxis, filters);
-  renderTrendChart(yearlyData, yearAxis, filters);
+  renderTrendChart(commodityRows, yearlyData, yearAxis, filters);
   updateActiveFilterSummary(filters);
 }
 
@@ -1462,6 +1587,7 @@ function resetAllFilters() {
   setFieldValue('directionFilter', 'ALL');
   setFieldValue('metricFilter', 'ton');
   setFieldValue('topNFilter', '8');
+  setChartTonMode('total');
 
   setFieldValue('tanggalTibaStart', '');
   setFieldValue('tanggalTibaEnd', '');
@@ -1482,6 +1608,10 @@ function registerSimpleFilterEvents() {
     const el = byId(id);
     if (!el) return;
     el.addEventListener('change', applyFiltersAndRender);
+  });
+
+  document.querySelectorAll('input[name="chartTonMode"]').forEach(input => {
+    input.addEventListener('change', applyFiltersAndRender);
   });
 
   const dateAndNumberIds = [

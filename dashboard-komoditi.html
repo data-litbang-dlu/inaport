@@ -119,6 +119,61 @@
       box-shadow: none;
     }
 
+    .chart-mode-toggle {
+      display: inline-flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      padding: 4px;
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-radius: 12px;
+    }
+
+    .chart-mode-toggle.is-disabled {
+      opacity: 0.55;
+    }
+
+    .chart-mode-toggle label {
+      position: relative;
+      margin: 0;
+    }
+
+    .chart-mode-toggle input {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .chart-mode-toggle span {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 30px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      color: #475569;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+
+    .chart-mode-toggle input:focus-visible+span {
+      outline: 2px solid #3b82f6;
+      outline-offset: 2px;
+    }
+
+    .chart-mode-toggle input:checked+span {
+      background: #2563eb;
+      color: white;
+      box-shadow: 0 4px 10px rgba(37, 99, 235, 0.2);
+    }
+
+    .chart-mode-toggle input:disabled+span {
+      cursor: not-allowed;
+    }
+
     .filter-section-title {
       font-size: 0.72rem;
       font-weight: 700;
@@ -726,7 +781,27 @@
           <h2 class="text-lg font-bold text-slate-800">Grafik Komoditi + Tren Tahunan</h2>
           <p class="text-sm text-slate-500">Bar chart komoditi teratas, dengan garis tren total metrik dan jumlah trip.</p>
         </div>
-        <span id="chartMeta" class="text-xs font-semibold text-slate-600 bg-slate-100 border border-slate-200 rounded-full px-3 py-1.5">-</span>
+        <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+          <div id="chartTonModeControl" class="chart-mode-toggle" role="radiogroup" aria-label="Tampilan barchart tonase">
+            <label>
+              <input type="radio" name="chartTonMode" value="total" checked>
+              <span>Total</span>
+            </label>
+            <label>
+              <input type="radio" name="chartTonMode" value="bongkar">
+              <span>Bongkar</span>
+            </label>
+            <label>
+              <input type="radio" name="chartTonMode" value="muat">
+              <span>Muat</span>
+            </label>
+            <label>
+              <input type="radio" name="chartTonMode" value="both">
+              <span>Bongkar + Muat</span>
+            </label>
+          </div>
+          <span id="chartMeta" class="text-xs font-semibold text-slate-600 bg-slate-100 border border-slate-200 rounded-full px-3 py-1.5">-</span>
+        </div>
       </div>
       <div class="relative min-h-[380px]">
         <canvas id="comparisonChart"></canvas>
